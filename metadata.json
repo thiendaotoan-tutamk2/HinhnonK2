@@ -1,0 +1,8 @@
+{
+  "name": "Remix K2 3D Math Lab - Thể tích hình nón",
+  "description": "Mô phỏng 3D trực quan hình thành công thức thể tích hình nón so sánh với hình trụ có cùng bán kính đáy và chiều cao (THCS).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

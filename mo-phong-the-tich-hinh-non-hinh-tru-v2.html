@@ -1,0 +1,567 @@
+<!--
+K2 • PHÒNG THÍ NGHIỆM HÌNH HỌC 3D (HÌNH NÓN – HÌNH TRỤ)
+Phiên bản: mo-phong-the-tich-hinh-non-hinh-tru-v2.html
+Chạy trực tiếp trong trình duyệt cùng file app.js đi kèm trong cùng thư mục.
+-->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K2 Math 3D Lab v4 - Guided Discovery Edition (Hình Nón & Hình Trụ)</title>
+    <meta name="description" content="Phòng thí nghiệm hình học không gian 3D tương tác: Thể tích, Khai triển phẳng thực tế, Quay tạo khối, Mặt cắt và Thử thách cho học sinh THCS.">
+
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- 3D & Animation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            background-color: #070f1e; color: #f1f5f9;
+        }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        .glass-panel {
+            background: rgba(11, 23, 44, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+        .glass-subpanel {
+            background: rgba(7, 15, 30, 0.68);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none;
+            background: #1e293b; border-radius: 9999px; height: 6px; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+            background: #f59e0b; cursor: pointer; box-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
+            border: 2px solid #ffffff; transition: transform 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+    </style>
+</head>
+<body class="select-none">
+
+    <!-- 3D WebGL Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- Top Main Header & Navigation -->
+    <header class="absolute top-2 left-0 right-0 z-20 pointer-events-none flex flex-col gap-1.5 px-3 md:px-5">
+        <!-- Top Bar -->
+        <div class="w-full flex items-center justify-between">
+            <!-- Brand & School -->
+            <div class="pointer-events-auto flex items-center gap-2">
+                <div class="glass-panel px-3 py-1.5 rounded-2xl flex items-center gap-2.5 border-cyan-500/30">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 shadow">
+                        <i class="ph-fill ph-compass-tool text-lg font-black"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[9px] font-black tracking-wider uppercase text-amber-400">K2 Math 3D Lab v4</span>
+                            <span class="text-[8px] text-slate-400 px-1 py-0.2 rounded bg-slate-800">THCS Tăng Bạt Hổ</span>
+                        </div>
+                        <h1 class="text-xs font-black text-white leading-tight">HÌNH NÓN – HÌNH TRỤ</h1>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5 Mode Tabs (Horizontal Scroll on Mobile) -->
+            <nav class="pointer-events-auto flex items-center gap-1 p-1 glass-panel rounded-2xl border-white/10 shadow-xl overflow-x-auto max-w-[55vw] md:max-w-none">
+                <button onclick="setMode('volume')" data-mode="volume" class="mode-tab px-3 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg border border-amber-300/40 flex items-center gap-1">
+                    <i class="ph-fill ph-drop text-sm"></i>
+                    <span>THỂ TÍCH</span>
+                </button>
+                <button onclick="setMode('net')" data-mode="net" class="mode-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1">
+                    <i class="ph-bold ph-scissors text-sm"></i>
+                    <span>KHAI TRIỂN</span>
+                </button>
+                <button onclick="setMode('revolution')" data-mode="revolution" class="mode-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1">
+                    <i class="ph-bold ph-arrows-clockwise text-sm"></i>
+                    <span>QUAY TẠO</span>
+                </button>
+                <button onclick="setMode('section')" data-mode="section" class="mode-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1">
+                    <i class="ph-bold ph-knife text-sm"></i>
+                    <span>MẶT CẮT</span>
+                </button>
+                <button onclick="setMode('challenge')" data-mode="challenge" class="mode-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1">
+                    <i class="ph-fill ph-trophy text-sm"></i>
+                    <span>THỬ THÁCH</span>
+                </button>
+            </nav>
+
+            <!-- Quick Utilities Toolbar -->
+            <div class="pointer-events-auto flex items-center gap-1">
+                <!-- Teacher Mode Toggle -->
+                <button onclick="toggleTeacherMode()" id="btn-teacher-toggle" class="glass-panel p-2 md:px-2.5 md:py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border-slate-700 hover:border-amber-400 transition-all flex items-center gap-1 shadow" title="Bật/Tắt chế độ Giáo viên (Phím T)">
+                    <i class="ph-fill ph-chalkboard-teacher text-amber-400 text-sm"></i>
+                    <span class="hidden md:inline">Giáo viên</span>
+                </button>
+                <!-- 3D Dimensions Label Toggle -->
+                <button onclick="toggleLabels()" id="btn-labels-toggle" class="glass-panel p-2 md:px-2.5 md:py-1.5 rounded-xl text-xs font-bold text-amber-400 border-amber-500/40 hover:border-amber-400 transition-all flex items-center gap-1 shadow" title="Bật/Tắt kích thước 3D (Phím L)">
+                    <i class="ph-bold ph-ruler text-amber-400 text-sm"></i>
+                    <span class="hidden md:inline">Kích thước</span>
+                </button>
+                <!-- Camera Preset Menu Button -->
+                <button onclick="resetCamera()" class="glass-panel p-2 md:px-2.5 md:py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border-slate-700 hover:border-cyan-400 transition-all flex items-center gap-1 shadow" title="Góc nhìn chuẩn">
+                    <i class="ph-bold ph-camera-rotate text-cyan-400 text-sm"></i>
+                    <span class="hidden md:inline">Góc chuẩn</span>
+                </button>
+                <!-- Snapshot Button -->
+                <button onclick="takeSnapshot()" class="glass-panel p-2 md:px-2.5 md:py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border-slate-700 hover:border-cyan-400 transition-all flex items-center gap-1 shadow" title="Chụp ảnh mô hình">
+                    <i class="ph-bold ph-camera text-sm"></i>
+                </button>
+                <!-- Auto Rotate Toggle -->
+                <button onclick="toggleAutoRotate()" id="btn-autorotate" class="glass-panel p-2 md:px-2.5 md:py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border-slate-700 hover:border-cyan-400 transition-all flex items-center gap-1 shadow" title="Xoay 3D">
+                    <i class="ph-bold ph-arrows-counter-clockwise text-sm"></i>
+                </button>
+                <!-- Fullscreen Button -->
+                <button onclick="toggleFullscreen()" class="glass-panel p-2 md:px-2.5 md:py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white border-slate-700 hover:border-cyan-400 transition-all flex items-center gap-1 shadow" title="Toàn màn hình trình chiếu (Phím F)">
+                    <i class="ph-bold ph-corners-out text-sm"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Guided Discovery Progress Banner & Sub-shape Toggle -->
+        <div class="w-full flex items-center justify-between px-1">
+            <!-- Sub-shape Selector -->
+            <div id="sub-shape-bar" class="pointer-events-auto hidden flex items-center gap-1 p-0.5 rounded-xl glass-subpanel border-cyan-500/30">
+                <button onclick="setShape('cone')" data-shape="cone" class="subshape-btn px-2.5 py-1 rounded-lg text-xs font-black transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 flex items-center gap-1">
+                    <i class="ph-fill ph-triangle text-xs"></i>
+                    <span>HÌNH NÓN</span>
+                </button>
+                <button onclick="setShape('cylinder')" data-shape="cylinder" class="subshape-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-slate-200 border border-transparent flex items-center gap-1">
+                    <i class="ph-fill ph-cylinder text-xs"></i>
+                    <span>HÌNH TRỤ</span>
+                </button>
+            </div>
+
+            <!-- Guided Discovery Steps Progress -->
+            <div class="pointer-events-auto mx-auto glass-panel px-3.5 py-1 rounded-full border-cyan-400/20 text-[11px] font-semibold text-slate-300 flex items-center gap-2 shadow-lg cursor-pointer hover:border-amber-400/50 transition-colors" onclick="toggleGuidedCard()" title="Bấm để mở/thu gọn phiếu Hướng Dẫn Khám Phá">
+                <div class="flex items-center gap-1">
+                    <span id="guided-dot-1" class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)]"></span>
+                    <span id="guided-dot-2" class="w-2 h-2 rounded-full bg-slate-700"></span>
+                    <span id="guided-dot-3" class="w-2 h-2 rounded-full bg-slate-700"></span>
+                    <span id="guided-dot-4" class="w-2 h-2 rounded-full bg-slate-700"></span>
+                </div>
+                <span id="guided-step-title" class="font-bold text-amber-300">1. DỰ ĐOÁN & ĐẶT VẤN ĐỀ</span>
+                <i id="guided-chevron-icon" class="ph-bold ph-caret-down text-amber-400 text-xs"></i>
+                <div class="flex items-center gap-1 ml-1 border-l border-slate-700 pl-1.5" onclick="event.stopPropagation()">
+                    <button onclick="setGuidedStep(appState.step - 1)" class="hover:text-white px-1 font-bold">←</button>
+                    <button onclick="setGuidedStep(appState.step + 1)" class="hover:text-white px-1 font-bold">→</button>
+                </div>
+            </div>
+
+            <!-- Camera Presets Buttons -->
+            <div class="pointer-events-auto hidden lg:flex items-center gap-1 text-[11px] font-mono glass-panel px-2 py-1 rounded-xl">
+                <span class="text-slate-500 text-[10px] mr-1">Camera:</span>
+                <button onclick="setCameraPreset('front')" class="px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-cyan-300">Trước</button>
+                <button onclick="setCameraPreset('side')" class="px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-cyan-300">Bên</button>
+                <button onclick="setCameraPreset('top')" class="px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-cyan-300">Trên</button>
+            </div>
+        </div>
+
+        <!-- Interactive Guided Discovery Card (Collapsible) -->
+        <div id="guided-discovery-container" class="pointer-events-auto mx-auto max-w-xl w-full px-2">
+            <div id="guided-discovery-card" class="glass-panel p-3 rounded-2xl border-amber-400/40 shadow-2xl transition-all duration-300">
+                <!-- Dynamically populated by renderGuidedCard() -->
+            </div>
+        </div>
+
+        <!-- Floating Teacher Toolbar (Collapsible) -->
+        <div id="teacher-toolbar" class="pointer-events-auto hidden w-full glass-panel p-2 rounded-2xl border-amber-400/30 flex items-center justify-between text-xs font-bold text-amber-200 shadow-2xl">
+            <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-amber-950/70 border border-amber-500/40 text-[10px] uppercase font-black">👨‍🏫 Chế Độ Giáo Viên</span>
+                <button onclick="toggleFormulas()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200">Ẩn/Hiện Công Thức</button>
+                <button onclick="toggleGrid()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200">Lưới Sàn</button>
+                <button onclick="toggleLabels()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200">Kích Thước 3D</button>
+                <button onclick="toggleLargeFont()" id="btn-large-font" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200">Cỡ Chữ Máy Chiếu</button>
+            </div>
+            <!-- Spotlight Buttons -->
+            <div class="flex items-center gap-1">
+                <span class="text-slate-400 text-[10px]">Spotlight:</span>
+                <button onclick="setSpotlight('r')" class="px-2 py-0.5 rounded bg-amber-500/30 border border-amber-400 text-amber-300 text-[11px]">Bán kính r</button>
+                <button onclick="setSpotlight('h')" class="px-2 py-0.5 rounded bg-sky-500/30 border border-sky-400 text-sky-300 text-[11px]">Chiều cao h</button>
+                <button onclick="setSpotlight('lateral')" class="px-2 py-0.5 rounded bg-pink-500/30 border border-pink-400 text-pink-300 text-[11px]">Mặt cong</button>
+                <button onclick="setSpotlight('base')" class="px-2 py-0.5 rounded bg-cyan-500/30 border border-cyan-400 text-cyan-300 text-[11px]">Đáy</button>
+                <button onclick="setSpotlight(null)" class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px]">Hủy</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Two-Panel Layout -->
+    <main class="absolute inset-0 z-10 pointer-events-none flex justify-between p-3 md:p-4 pt-24 pb-3 overflow-hidden">
+        
+        <!-- Left Panel: Geometry Dimensions & Pure Mathematics Core -->
+        <aside class="w-64 md:w-72 flex flex-col gap-2 pointer-events-auto overflow-y-auto max-h-full pr-1">
+            
+            <!-- Parameters Box -->
+            <div class="glass-panel rounded-2xl p-3 flex flex-col gap-2">
+                <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                    <div class="flex items-center gap-1.5">
+                        <i class="ph-bold ph-sliders-horizontal text-amber-400 text-base"></i>
+                        <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Thông Số Kích Thước</h2>
+                    </div>
+                    <!-- Unit Selector -->
+                    <select onchange="setUnit(this.value)" class="bg-slate-900 text-cyan-300 font-mono text-[11px] font-bold px-1.5 py-0.5 rounded border border-slate-700 cursor-pointer outline-none">
+                        <option value="cm">cm</option>
+                        <option value="dm">dm</option>
+                        <option value="m">m</option>
+                    </select>
+                </div>
+
+                <!-- Radius Slider r -->
+                <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center justify-between text-xs font-semibold">
+                        <span class="text-slate-300 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
+                            Bán kính đáy <b class="text-amber-300 font-mono">r</b>
+                        </span>
+                        <span class="font-mono text-xs font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
+                            <span id="radius-val">2.2</span> cm
+                        </span>
+                    </div>
+                    <input type="range" id="slider-r" min="1.4" max="2.8" step="0.1" value="2.2" class="w-full cursor-pointer accent-amber-500">
+                </div>
+
+                <!-- Height Slider h -->
+                <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center justify-between text-xs font-semibold">
+                        <span class="text-slate-300 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span>
+                            Chiều cao <b class="text-sky-300 font-mono">h</b>
+                        </span>
+                        <span class="font-mono text-xs font-bold text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-500/30">
+                            <span id="height-val">6.6</span> cm
+                        </span>
+                    </div>
+                    <input type="range" id="slider-h" min="4.0" max="8.5" step="0.1" value="6.6" class="w-full cursor-pointer accent-sky-500">
+                </div>
+
+                <!-- Presets Quick Buttons -->
+                <div class="flex items-center justify-between pt-1 border-t border-slate-700/60 text-[10px]">
+                    <span class="text-slate-400">Mẫu:</span>
+                    <button onclick="applyPreset(2, 6)" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700">r=2, h=6</button>
+                    <button onclick="applyPreset(3, 5)" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700">r=3, h=5</button>
+                    <button onclick="randomizeDimensions()" class="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 hover:text-amber-200 border border-amber-700/40">🎲 Ngẫu nhiên</button>
+                </div>
+
+                <!-- Geometry Calculations Grid -->
+                <div class="grid grid-cols-2 gap-1.5 pt-1 text-[11px] font-mono border-t border-slate-700/60">
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">Đường sinh l</span>
+                        <span class="text-pink-300 font-bold" id="calc-l-val">6.96 cm</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">Góc quạt θ</span>
+                        <span class="text-amber-300 font-bold" id="calc-theta-val">113.8°</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col col-span-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[9px] font-sans text-slate-400">Chu vi đáy (2πr):</span>
+                            <span class="text-cyan-300 font-bold" id="calc-cbase-val">13.82 cm</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metric Cards -->
+                <div class="grid grid-cols-2 gap-1.5 pt-1 text-[11px] font-mono border-t border-slate-700/60">
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">S<sub>đáy</sub></span>
+                        <span class="font-bold text-amber-300 text-xs" id="val-sbase">15.21 cm²</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">V<sub>nón</sub></span>
+                        <span class="font-bold text-emerald-300 text-xs" id="val-vcone">33.45 cm³</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col col-span-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[9px] font-sans text-slate-400">Thể tích Trụ V<sub>trụ</sub>:</span>
+                            <span class="font-bold text-sky-300 text-xs" id="val-vcyl">100.36 cm³</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulas Accordion -->
+            <div class="glass-panel rounded-2xl p-3 flex flex-col gap-2">
+                <button onclick="toggleFormulas()" class="flex items-center justify-between w-full text-left">
+                    <div class="flex items-center gap-1.5">
+                        <i class="ph-bold ph-function text-cyan-400 text-base"></i>
+                        <h3 class="text-xs font-black uppercase tracking-wider text-slate-200">Công Thức Đầy Đủ</h3>
+                    </div>
+                    <i id="formula-accordion-icon" class="ph-bold ph-caret-up text-amber-400 text-sm"></i>
+                </button>
+                <div id="formula-accordion-content" class="pt-1 border-t border-slate-700/60"></div>
+            </div>
+        </aside>
+
+        <!-- Right Panel: Contextual to Mode (Volume, Net, Revolution, Section, Challenge) -->
+        <aside class="w-72 md:w-80 flex flex-col gap-2 pointer-events-auto overflow-y-auto max-h-full pl-1">
+            
+            <!-- ================= VIEW 1: THỂ TÍCH ================= -->
+            <div id="panel-mode-volume" class="flex flex-col gap-2">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-fill ph-flask text-amber-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Thí Nghiệm Đổ Nước</h2>
+                        </div>
+                        <span id="step-counter-badge" class="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/70 px-2 py-0.5 rounded-full border border-amber-700/50">
+                            Mức 0 / 3
+                        </span>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5">
+                        <button id="btn-pour-1" onclick="handlePour(1)" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-extrabold transition-all bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow active:scale-95">
+                            <span>1. Đổ lần 1 (1/3 Trụ)</span>
+                            <i id="check-1" class="ph-bold ph-check-circle text-base hidden text-emerald-300"></i>
+                        </button>
+                        <button id="btn-pour-2" onclick="handlePour(2)" disabled class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-800/60 text-slate-500 border border-slate-700/50 cursor-not-allowed">
+                            <span>2. Đổ lần 2 (2/3 Trụ)</span>
+                            <i id="check-2" class="ph-bold ph-check-circle text-base hidden text-emerald-300"></i>
+                        </button>
+                        <button id="btn-pour-3" onclick="handlePour(3)" disabled class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-800/60 text-slate-500 border border-slate-700/50 cursor-not-allowed">
+                            <span>3. Đổ lần 3 (Trụ đầy)</span>
+                            <i id="check-3" class="ph-bold ph-check-circle text-base hidden text-emerald-300"></i>
+                        </button>
+                    </div>
+
+                    <!-- Auto Play & Reset -->
+                    <div class="grid grid-cols-2 gap-1.5 pt-1">
+                        <button onclick="playVolumeAuto()" class="py-1.5 px-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-fill ph-play text-sm"></i>
+                            <span>Chạy Toàn Bộ</span>
+                        </button>
+                        <button onclick="resetVolumeSimulation(true)" class="py-1.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-bold flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400"></i>
+                            <span>Đặt Lại</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Formula Journey & Comparison Bar -->
+                <div class="glass-panel rounded-2xl p-3 flex flex-col gap-2">
+                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <i class="ph-bold ph-lightbulb text-amber-400"></i>
+                        <span>Hình Thành Công Thức</span>
+                    </h3>
+                    <div id="formula-journey-container" class="glass-subpanel rounded-xl p-2.5 flex flex-col gap-1 min-h-[60px] justify-center"></div>
+
+                    <!-- Visual Comparison Bar -->
+                    <div class="glass-subpanel p-2 rounded-xl space-y-1">
+                        <div class="flex justify-between text-[10px] font-mono text-slate-400">
+                            <span>Tỉ lệ thể tích:</span>
+                            <b class="text-amber-300 font-bold">1 Nón : 3 Trụ</b>
+                        </div>
+                        <div class="w-full flex items-center gap-1 h-3">
+                            <div class="w-1/3 h-full bg-amber-400 rounded-sm" title="V nón = 1 phần"></div>
+                            <div class="w-2/3 h-full bg-sky-500/80 rounded-sm" title="V trụ = 3 phần (gấp 3)"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 2: KHAI TRIỂN ================= -->
+            <div id="panel-mode-net" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-cube text-cyan-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Khai Triển Thực Tế</h2>
+                        </div>
+                        <span id="unfold-progress-val" class="font-mono text-xs font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30">
+                            0%
+                        </span>
+                    </div>
+
+                    <!-- Unfold Progress Scrub Slider -->
+                    <div class="flex flex-col gap-1">
+                        <div class="flex justify-between text-[11px] text-slate-300 font-semibold">
+                            <span>Mức độ mở mặt phẳng:</span>
+                            <span class="text-slate-400 font-mono">0% (3D) → 100% (Phẳng)</span>
+                        </div>
+                        <input type="range" id="slider-unfold-progress" min="0" max="100" step="1" value="0" class="w-full cursor-pointer accent-cyan-500">
+                    </div>
+
+                    <!-- Playback Actions -->
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button onclick="playUnfoldAuto()" class="py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 text-white text-xs font-black flex items-center justify-center gap-1 active:scale-95 shadow">
+                            <i class="ph-fill ph-play text-sm"></i>
+                            <span>Tự Động Mở</span>
+                        </button>
+                        <button onclick="resetUnfold()" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400"></i>
+                            <span>Gấp Lại 3D</span>
+                        </button>
+                    </div>
+
+                    <!-- Mathematical Proof Visual Callout -->
+                    <div class="glass-subpanel p-2.5 rounded-xl text-xs space-y-1 text-slate-300">
+                        <div class="font-bold text-amber-300 text-[11px] uppercase">Quy Luật Tiếp Giáp:</div>
+                        <p class="text-[11px] leading-relaxed">
+                            • Độ dài cung quạt (nón) / cạnh dài (trụ) bằng đúng <b class="text-cyan-300 font-mono">Chu vi đáy (2πr)</b>.<br>
+                            • Bán kính của quạt tròn bằng đúng <b class="text-pink-300 font-mono">Đường sinh l</b>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 3: QUAY TẠO KHỐI ================= -->
+            <div id="panel-mode-rev" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-arrows-clockwise text-amber-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Quay Hình Phẳng Quanh Trục</h2>
+                        </div>
+                        <span id="rev-angle-val" class="font-mono text-xs font-black text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
+                            0°
+                        </span>
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <div class="flex justify-between text-[11px] text-slate-300 font-semibold">
+                            <span>Góc quay quét mặt:</span>
+                            <span class="text-slate-400 font-mono">0° → 360°</span>
+                        </div>
+                        <input type="range" id="slider-rev-angle" min="0" max="360" step="1" value="0" class="w-full cursor-pointer accent-amber-500">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button onclick="playRevolution()" class="py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black flex items-center justify-center gap-1 active:scale-95 shadow">
+                            <i class="ph-fill ph-play text-sm"></i>
+                            <span>Quay 360°</span>
+                        </button>
+                        <button onclick="resetRevolution()" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400"></i>
+                            <span>Đặt lại 0°</span>
+                        </button>
+                    </div>
+
+                    <!-- Trajectory & Ghost toggles -->
+                    <div class="flex items-center justify-between pt-1 border-t border-slate-700/60 text-xs">
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+                            <input type="checkbox" checked onchange="appState.showTrajectory = this.checked; setRevolutionAngle(appState.revolveAngleDeg);" class="rounded bg-slate-800 border-slate-600 text-cyan-500">
+                            <span>Quỹ đạo điểm B</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+                            <input type="checkbox" onchange="appState.showGhostProfiles = this.checked; setRevolutionAngle(appState.revolveAngleDeg);" class="rounded bg-slate-800 border-slate-600 text-cyan-500">
+                            <span>Bóng trung gian</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 4: MẶT CẮT (SECTIONS) ================= -->
+            <div id="panel-mode-section" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-knife text-emerald-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Mặt Cắt Không Gian</h2>
+                        </div>
+                    </div>
+
+                    <!-- Cut Type Toggle -->
+                    <div class="grid grid-cols-2 gap-1 p-0.5 rounded-xl glass-subpanel text-xs font-bold">
+                        <button onclick="appState.sectionType = 'horizontal'; updateSection();" class="py-1.5 px-2 rounded-lg bg-emerald-600/30 text-emerald-300 border border-emerald-400/40">
+                            Mặt Cắt Ngang
+                        </button>
+                        <button onclick="appState.sectionType = 'axial'; updateSection();" class="py-1.5 px-2 rounded-lg text-slate-400 hover:text-white">
+                            Mặt Cắt Qua Trục
+                        </button>
+                    </div>
+
+                    <!-- Height slider for horizontal slice -->
+                    <div class="flex flex-col gap-1">
+                        <div class="flex justify-between text-[11px] text-slate-300 font-semibold">
+                            <span>Vị trí lát cắt ngang:</span>
+                            <span class="text-slate-400 font-mono">0% (Đáy) → 100% (Đỉnh)</span>
+                        </div>
+                        <input type="range" id="slider-section-y" min="0" max="100" step="1" value="50" class="w-full cursor-pointer accent-emerald-500">
+                    </div>
+
+                    <!-- Realtime Slice Readout Card -->
+                    <div id="section-readout" class="glass-subpanel p-2.5 rounded-xl"></div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 5: THỬ THÁCH (CHALLENGE) ================= -->
+            <div id="panel-mode-challenge" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-fill ph-trophy text-amber-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Đấu Trường Kiến Thức</h2>
+                        </div>
+                    </div>
+                    <div id="challenge-content-card"></div>
+                </div>
+            </div>
+
+        </aside>
+    </main>
+
+    <!-- Bottom Toast Notifications -->
+    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 translate-y-3">
+        <div class="glass-panel px-4 py-2 rounded-full border border-amber-500/40 shadow-2xl flex items-center gap-2 text-xs font-bold text-amber-200">
+            <i class="ph-fill ph-info text-amber-400 text-sm"></i>
+            <span id="toast-text">Thông báo</span>
+        </div>
+    </div>
+
+    <!-- Victory Modal Banner -->
+    <div id="victory-banner" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-40 pointer-events-none transition-all duration-500 opacity-0 -translate-y-4">
+        <div class="glass-panel px-6 py-3 rounded-3xl border border-cyan-400/50 shadow-[0_0_35px_rgba(6,182,212,0.4)] flex items-center gap-3 bg-slate-900/95 pointer-events-auto">
+            <span class="text-2xl">🎉</span>
+            <div>
+                <h4 class="text-xs font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300 uppercase">Khám Phá Thành Công!</h4>
+                <p class="text-xs text-slate-300">Ba hình nón nước vừa đúng trọn vẹn một hình trụ có cùng r và h!</p>
+            </div>
+            <button onclick="closeVictoryBanner()" class="ml-2 text-slate-400 hover:text-white p-1">✕</button>
+        </div>
+    </div>
+
+    <!-- Dev Mode HUD (Triggered by F2) -->
+    <div id="dev-hud" class="fixed bottom-2 left-2 z-50 hidden glass-panel px-3 py-1.5 rounded-lg border border-rose-500/40 text-[10px] font-mono text-rose-300">
+        <div class="font-bold text-white flex justify-between"><span>DEV MODE (F2)</span> <button onclick="document.getElementById('dev-hud').classList.add('hidden')">✕</button></div>
+        <div id="dev-info" class="pt-0.5"></div>
+    </div>
+
+    <!-- Engine Script -->
+    <script src="app.js"></script>
+</body>
+</html>

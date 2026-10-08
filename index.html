@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K2 3D Math Lab - Thể tích hình nón</title>
+    <meta name="description" content="Mô phỏng 3D trực quan hình thành công thức thể tích hình nón so sánh với hình trụ có cùng bán kính đáy và chiều cao (THCS).">
+    <meta property="og:title" content="K2 3D Math Lab - Thể tích hình nón">
+    <meta property="og:description" content="Mô phỏng 3D trực quan hình thành công thức thể tích hình nón so sánh với hình trụ có cùng bán kính đáy và chiều cao (THCS).">
+
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- 3D & Animation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            background-color: #070f1e; color: #f1f5f9;
+        }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        .glass-panel {
+            background: rgba(11, 23, 44, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+        .glass-subpanel {
+            background: rgba(7, 15, 30, 0.68);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        #laser-pointer-dot {
+            position: fixed;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: #ef4444;
+            box-shadow: 0 0 16px 6px rgba(239, 68, 68, 0.95), 0 0 32px 10px rgba(248, 113, 113, 0.55);
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none;
+            background: #1e293b; border-radius: 9999px; height: 6px; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+            background: #f59e0b; cursor: pointer; box-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
+            border: 2px solid #ffffff; transition: transform 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        /* Level 2 Submenu & Dock Animations */
+        @keyframes submenuFadeSlide {
+            0% { opacity: 0; transform: translateY(-6px) scale(0.98); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .submenu-animate {
+            animation: submenuFadeSlide 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Draggable Lesson Window Styles */
+        .lesson-window {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 20;
+            will-change: transform;
+            background: rgba(11, 23, 44, 0.96);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .lesson-window.is-dragging {
+            box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.9), 0 0 26px rgba(245, 158, 11, 0.55);
+            border-color: rgba(245, 158, 11, 0.85);
+            transition: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        .lesson-top-drag-bar,
+        .lesson-drag-handle {
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .lesson-top-drag-bar:active,
+        .lesson-drag-handle:active,
+        .is-dragging .lesson-top-drag-bar,
+        .is-dragging .lesson-drag-handle,
+        .is-dragging {
+            cursor: grabbing !important;
+        }
+        #lesson-window-body {
+            touch-action: pan-y;
+        }
+
+        /* Pinned Dock State (Requirement 16 & 17) */
+        .lesson-window-pinned {
+            position: fixed !important;
+            top: 56px !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            left: auto !important;
+            height: calc(100vh - 56px) !important;
+            max-height: none !important;
+            width: 360px !important;
+            max-width: 360px !important;
+            border-radius: 0 !important;
+            border-top: none !important;
+            border-bottom: none !important;
+            border-right: none !important;
+            z-index: 20 !important;
+        }
+        .lesson-window-pinned #lesson-window-body {
+            max-height: calc(100vh - 110px) !important;
+        }
+        .lesson-window-pinned #lesson-resize-handle {
+            display: none !important;
+        }
+
+        /* Minimized Chip State (Requirement 8) */
+        .lesson-window-minimized #lw-step-nav,
+        .lesson-window-minimized #lesson-window-body,
+        .lesson-window-minimized #lesson-resize-handle {
+            display: none !important;
+        }
+        .lesson-window-minimized {
+            width: auto !important;
+            min-width: 270px !important;
+            max-width: 380px !important;
+            border-color: rgba(245, 158, 11, 0.5) !important;
+        }
+
+        /* Focus Mode Styles */
+        body.focus-mode header,
+        body.focus-mode main,
+        body.focus-mode #teacher-toolbar,
+        body.focus-mode #guided-discovery-container,
+        body.focus-mode #lesson-window,
+        body.focus-mode #lesson-floating-fab,
+        body.focus-mode #click-3d-banner,
+        body.focus-mode #btn-uncollapse-left,
+        body.focus-mode #btn-uncollapse-right {
+            display: none !important;
+        }
+        body.focus-mode #focus-mode-bar {
+            display: flex !important;
+        }
+
+        /* Print Friendly Styles for Worksheets and Reports */
+        @media print {
+            body { background: white !important; color: black !important; }
+            #canvas-container, header, main, #teacher-toolbar, #guided-discovery-container, #lesson-window, #lesson-floating-fab, #click-3d-banner, #laser-pointer-dot, #toast, #victory-banner, #dev-hud {
+                display: none !important;
+            }
+            .no-print { display: none !important; }
+            #printable-sheet {
+                display: block !important;
+                position: absolute !important;
+                left: 0 !important; top: 0 !important;
+                width: 100% !important;
+                color: #0f172a !important;
+                background: white !important;
+            }
+        }
+    </style>
+</head>
+<body class="select-none">
+
+    <!-- 3D WebGL Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- Top Main Header (Two-Level Navigation System) -->
+    <header class="absolute top-2 left-0 right-0 z-30 pointer-events-none flex flex-col gap-1 px-2 md:px-5">
+        <!-- LEVEL 1: Main Navigation Bar -->
+        <div class="w-full flex items-center justify-between gap-1.5 flex-wrap md:flex-nowrap">
+            <!-- Brand & Role Switcher -->
+            <div class="pointer-events-auto flex items-center gap-2">
+                <div class="glass-panel px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-2xl flex items-center gap-2 border-cyan-500/30">
+                    <div class="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 shadow">
+                        <i class="ph-fill ph-compass-tool text-base md:text-lg font-black"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[9px] font-black tracking-wider uppercase text-amber-400">K2 Math 3D v5</span>
+                            <span class="text-[8px] text-cyan-300 px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-700/50">Classroom</span>
+                        </div>
+                        <h1 class="text-[11px] md:text-xs font-black text-white leading-tight">HÌNH NÓN – HÌNH TRỤ</h1>
+                    </div>
+                </div>
+
+                <!-- Two-Role Segmented Selector [ HỌC SINH | GIÁO VIÊN ] -->
+                <div class="flex items-center p-0.5 rounded-xl glass-panel border-amber-400/40 text-xs">
+                    <button onclick="setAppRole('student')" id="role-btn-student" class="px-2.5 py-1 rounded-lg font-black transition-all bg-gradient-to-r from-cyan-500 to-blue-500 text-white flex items-center gap-1 shadow" title="Chế độ học sinh">
+                        <i class="ph-fill ph-student text-xs"></i>
+                        <span class="text-[11px]">Học Sinh</span>
+                    </button>
+                    <button onclick="setAppRole('teacher')" id="role-btn-teacher" class="px-2.5 py-1 rounded-lg font-bold transition-all text-slate-300 hover:text-white flex items-center gap-1" title="Chế độ giáo viên">
+                        <i class="ph-fill ph-chalkboard-teacher text-xs"></i>
+                        <span class="text-[11px]">Giáo Viên</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- LEVEL 1 NAVIGATION (5 Main Groups + Roadmap Popover) -->
+            <nav class="pointer-events-auto flex items-center gap-1 p-1 glass-panel rounded-2xl border-white/10 shadow-xl overflow-x-auto max-w-full">
+                <!-- 1. [ 📘 HỌC ] -->
+                <button onclick="toggleSubmenu('learn')" id="nav-btn-learn" class="nav-lvl1-btn px-2.5 md:px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 text-slate-200 hover:text-white hover:bg-slate-800/80 border border-transparent">
+                    <i class="ph-fill ph-book-open text-amber-400 text-sm"></i>
+                    <span>HỌC</span>
+                    <i class="ph-bold ph-caret-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Shortcut: [ 🗺 LỘ TRÌNH ] (Requirement 9) -->
+                <button onclick="toggleSubmenu('roadmap')" id="nav-btn-roadmap" class="nav-lvl1-btn px-2 md:px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 text-amber-300 hover:text-white hover:bg-slate-800/80 border border-amber-500/30">
+                    <i class="ph-bold ph-map-trifold text-amber-400 text-sm"></i>
+                    <span class="hidden sm:inline">LỘ TRÌNH</span>
+                    <span id="roadmap-badge" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-black text-[9px]">1/7</span>
+                </button>
+
+                <!-- 2. [ 🧰 CÔNG CỤ ] -->
+                <button onclick="toggleSubmenu('tools')" id="nav-btn-tools" class="nav-lvl1-btn px-2.5 md:px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 text-slate-200 hover:text-white hover:bg-slate-800/80 border border-transparent">
+                    <i class="ph-fill ph-toolbox text-cyan-400 text-sm"></i>
+                    <span>CÔNG CỤ</span>
+                    <i class="ph-bold ph-caret-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- 3. [ 👨‍🏫 GIÁO VIÊN ] -->
+                <button onclick="toggleSubmenu('teacher')" id="nav-btn-teacher" class="nav-lvl1-btn px-2.5 md:px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 text-slate-200 hover:text-white hover:bg-slate-800/80 border border-transparent">
+                    <i class="ph-fill ph-chalkboard-teacher text-purple-400 text-sm"></i>
+                    <span class="hidden sm:inline">GIÁO VIÊN</span>
+                    <span class="sm:hidden">GV</span>
+                    <i class="ph-bold ph-caret-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- 4. [ 👁 HIỂN THỊ ] -->
+                <button onclick="toggleSubmenu('display')" id="nav-btn-display" class="nav-lvl1-btn px-2.5 md:px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 text-slate-200 hover:text-white hover:bg-slate-800/80 border border-transparent">
+                    <i class="ph-fill ph-eye text-emerald-400 text-sm"></i>
+                    <span>HIỂN THỊ</span>
+                    <i class="ph-bold ph-caret-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- 🎨 MÀU SẮC (Requirements 3 & 10) -->
+                <div class="relative inline-block">
+                    <button onclick="toggleColorPalette(event)" id="nav-btn-color" class="nav-lvl1-btn px-2 md:px-2.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 text-pink-300 hover:text-white hover:bg-slate-800/80 border border-pink-500/30">
+                        <i class="ph-fill ph-palette text-pink-400 text-sm"></i>
+                        <span>🎨 MÀU</span>
+                    </button>
+                    <!-- Floating Color Palette Popover (Requirement 10: 260px wide, under button, outside click closes) -->
+                    <div id="floating-color-palette" class="hidden absolute top-full mt-2 right-0 z-50 w-64 md:w-72 glass-panel p-3 rounded-2xl border border-pink-500/40 shadow-2xl flex flex-col gap-2.5 text-xs select-none">
+                        <div class="flex items-center justify-between pb-1.5 border-b border-slate-700/60">
+                            <div class="flex items-center gap-1.5">
+                                <i class="ph-fill ph-palette text-pink-400"></i>
+                                <span class="font-black uppercase tracking-wider text-slate-200 text-[11px]">Tùy Chỉnh Màu Sắc</span>
+                            </div>
+                            <button onclick="closeColorPalette()" class="text-slate-400 hover:text-white p-0.5 rounded text-xs">✕</button>
+                        </div>
+
+                        <!-- 3 Color Pickers with Hex display (Requirement 3.1) -->
+                        <div class="space-y-1.5">
+                            <!-- Màu Đế -->
+                            <div class="flex items-center justify-between p-1.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                                <span class="text-slate-300 font-bold text-[11px]">Màu Đế</span>
+                                <div class="flex items-center gap-2">
+                                    <span id="hex-pedestal" class="font-mono text-[10px] text-slate-400 uppercase">#111827</span>
+                                    <input type="color" id="picker-pedestal" value="#111827" oninput="onColorPickerChange('pedestal', this.value)" class="w-6 h-6 rounded border-0 cursor-pointer bg-transparent p-0">
+                                </div>
+                            </div>
+
+                            <!-- Màu Hình -->
+                            <div class="flex items-center justify-between p-1.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                                <span class="text-slate-300 font-bold text-[11px]">Màu Hình</span>
+                                <div class="flex items-center gap-2">
+                                    <span id="hex-shape" class="font-mono text-[10px] text-slate-400 uppercase">#FFE89A</span>
+                                    <input type="color" id="picker-shape" value="#FFE89A" oninput="onColorPickerChange('shape', this.value)" class="w-6 h-6 rounded border-0 cursor-pointer bg-transparent p-0">
+                                </div>
+                            </div>
+
+                            <!-- Màu Nền -->
+                            <div class="flex items-center justify-between p-1.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                                <span class="text-slate-300 font-bold text-[11px]">Màu Nền</span>
+                                <div class="flex items-center gap-2">
+                                    <span id="hex-background" class="font-mono text-[10px] text-slate-400 uppercase">#061525</span>
+                                    <input type="color" id="picker-background" value="#061525" oninput="onColorPickerChange('background', this.value)" class="w-6 h-6 rounded border-0 cursor-pointer bg-transparent p-0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Contrast Warning (Requirement 4) -->
+                        <div id="color-contrast-warning" class="hidden p-2 rounded-xl bg-amber-950/80 border border-amber-500/50 text-amber-200 text-[10px] leading-tight flex items-start gap-1.5">
+                            <span class="text-amber-400 text-xs shrink-0">⚠️</span>
+                            <span>Màu hình và màu đế đang quá giống nhau, học sinh có thể khó quan sát.</span>
+                        </div>
+
+                        <!-- Auto Contrast Button (Requirement 4.1) -->
+                        <button onclick="applyAutoContrast()" class="w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-[11px] shadow flex items-center justify-center gap-1 active:scale-95 transition-all">
+                            <span>✨ TỰ ĐỘNG TƯƠNG PHẢN</span>
+                        </button>
+
+                        <!-- Presets (Requirement 4.2) -->
+                        <div class="pt-1 border-t border-slate-700/60">
+                            <span class="text-[10px] text-slate-400 font-bold block mb-1">Bộ Màu Mẫu (Presets):</span>
+                            <div class="grid grid-cols-3 gap-1">
+                                <button onclick="applyColorPreset('stem-dark')" class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-center text-[10px] font-bold text-slate-200 flex flex-col items-center gap-0.5" title="Đế: #111827, Nón: #FFE38A, Nền: #061525">
+                                    <div class="flex gap-0.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#111827"></span><span class="w-2.5 h-2.5 rounded-full" style="background:#FFE38A"></span></div>
+                                    <span>STEM Tối</span>
+                                </button>
+                                <button onclick="applyColorPreset('bright-edu')" class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-center text-[10px] font-bold text-slate-200 flex flex-col items-center gap-0.5" title="Đế: #334155, Nón: #FFF1B5, Nền: #DCEAF5">
+                                    <div class="flex gap-0.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#334155"></span><span class="w-2.5 h-2.5 rounded-full" style="background:#FFF1B5"></span></div>
+                                    <span>Sáng GD</span>
+                                </button>
+                                <button onclick="applyColorPreset('sci-blue')" class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-center text-[10px] font-bold text-slate-200 flex flex-col items-center gap-0.5" title="Đế: #172554, Nón: #FDE68A, Nền: #020617">
+                                    <div class="flex gap-0.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#172554"></span><span class="w-2.5 h-2.5 rounded-full" style="background:#FDE68A"></span></div>
+                                    <span>Khoa Học</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Restore Default (Requirement 6) -->
+                        <button onclick="resetDefaultColors()" class="w-full py-1 text-center text-[10px] text-slate-400 hover:text-slate-200 hover:underline">
+                            ↺ Khôi phục màu mặc định
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5. [ ⚙ CÀI ĐẶT ] -->
+                <button onclick="toggleSubmenu('settings')" id="nav-btn-settings" class="nav-lvl1-btn px-2 md:px-2.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 text-slate-200 hover:text-white hover:bg-slate-800/80 border border-transparent">
+                    <i class="ph-fill ph-gear text-slate-400 text-sm"></i>
+                    <span class="hidden md:inline">CÀI ĐẶT</span>
+                    <i class="ph-bold ph-caret-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Quick Fullscreen Button -->
+                <button onclick="toggleFullscreen()" class="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition-all text-xs" title="Toàn màn hình (F)">
+                    <i class="ph-bold ph-corners-out text-sm"></i>
+                </button>
+            </nav>
+        </div>
+
+        <!-- LEVEL 2 SUBMENUS (Floating Directly Underneath Header) -->
+        <div id="submenus-floating-container" class="pointer-events-auto relative w-full flex justify-end">
+            
+            <!-- SUBMENU 1: 📘 HỌC -->
+            <div id="submenu-learn" class="lvl2-submenu hidden glass-panel p-1.5 rounded-2xl border-amber-400/40 shadow-2xl flex items-center gap-1 overflow-x-auto max-w-full">
+                <!-- Sub-shape toggle -->
+                <div class="flex items-center p-0.5 rounded-xl bg-slate-900/80 border border-slate-700 text-xs mr-1 shrink-0">
+                    <button onclick="setShape('cone')" id="sub-shape-cone-btn" class="subshape-btn px-2 py-1 rounded-lg text-[11px] font-black transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 flex items-center gap-1">
+                        <i class="ph-fill ph-triangle text-[11px]"></i>
+                        <span>Nón</span>
+                    </button>
+                    <button onclick="setShape('cylinder')" id="sub-shape-cyl-btn" class="subshape-btn px-2 py-1 rounded-lg text-[11px] font-bold text-slate-400 hover:text-slate-200 border border-transparent flex items-center gap-1">
+                        <i class="ph-fill ph-cylinder text-[11px]"></i>
+                        <span>Trụ</span>
+                    </button>
+                </div>
+                <!-- 6 Modes -->
+                <button onclick="setMode('volume'); closeAllSubmenus();" data-mode="volume" class="mode-tab px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
+                    <i class="ph-fill ph-drop text-amber-400 text-xs"></i>
+                    <span>Thể tích</span>
+                </button>
+                <button onclick="setMode('net'); closeAllSubmenus();" data-mode="net" class="mode-tab px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-scissors text-amber-400 text-xs"></i>
+                    <span>Khai triển</span>
+                </button>
+                <button onclick="setMode('revolution'); closeAllSubmenus();" data-mode="revolution" class="mode-tab px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-arrows-clockwise text-cyan-400 text-xs"></i>
+                    <span>Quay tạo</span>
+                </button>
+                <button onclick="setMode('section'); closeAllSubmenus();" data-mode="section" class="mode-tab px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-knife text-emerald-400 text-xs"></i>
+                    <span>Mặt cắt</span>
+                </button>
+                <button onclick="setMode('compare'); closeAllSubmenus();" data-mode="compare" class="mode-tab px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-columns text-sky-400 text-xs"></i>
+                    <span>So sánh</span>
+                </button>
+                <button onclick="setMode('challenge'); closeAllSubmenus();" data-mode="challenge" class="mode-tab px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60 flex items-center gap-1 shrink-0">
+                    <i class="ph-fill ph-trophy text-yellow-400 text-xs"></i>
+                    <span>Thử thách</span>
+                </button>
+                <!-- Trigger Lesson Dock -->
+                <button onclick="toggleGuidedCard(true); closeAllSubmenus();" class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-xs font-black flex items-center gap-1 shrink-0 shadow ml-1">
+                    <i class="ph-fill ph-book-open"></i>
+                    <span>Mở Bài Học</span>
+                </button>
+            </div>
+
+            <!-- SUBMENU 2: 🧰 CÔNG CỤ -->
+            <div id="submenu-tools" class="lvl2-submenu hidden glass-panel p-1.5 rounded-2xl border-cyan-400/40 shadow-2xl flex items-center gap-1 overflow-x-auto max-w-full">
+                <button onclick="toggleMeasureTool()" id="btn-measure-toggle" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-ruler text-emerald-400 text-xs"></i>
+                    <span>Đo</span>
+                </button>
+                <button onclick="capture3DScreenshot()" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-camera text-sky-400 text-xs"></i>
+                    <span>Chụp ảnh</span>
+                </button>
+                <button onclick="openDiaryModal(); closeAllSubmenus();" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-notebook text-amber-400 text-xs"></i>
+                    <span>Nhật ký</span>
+                    <span id="diary-counter-badge" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-black text-[9px]">0</span>
+                </button>
+                <button onclick="randomizeDimensions()" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-dice-five text-pink-400 text-xs"></i>
+                    <span>Dữ liệu mẫu</span>
+                </button>
+                <button onclick="openRealWorldModal(); closeAllSubmenus();" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-package text-emerald-400 text-xs"></i>
+                    <span>Thực tế</span>
+                </button>
+                <button onclick="repeatCurrentExperiment()" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-arrow-counter-clockwise text-orange-400 text-xs"></i>
+                    <span>Lặp thí nghiệm</span>
+                </button>
+                <button onclick="openFormulaBuilderModal(); closeAllSubmenus();" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-puzzle-piece text-cyan-400 text-xs"></i>
+                    <span>Lắp CT</span>
+                </button>
+                <button onclick="openLabelDragActivity(); closeAllSubmenus();" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-indigo-300 border border-indigo-500/40 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-tag text-indigo-400 text-xs"></i>
+                    <span>Kéo nhãn 3D</span>
+                </button>
+                <button onclick="openWorksheetModal(false); closeAllSubmenus();" class="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-printer text-cyan-400 text-xs"></i>
+                    <span>In phiếu</span>
+                </button>
+            </div>
+
+            <!-- SUBMENU 3: 👁 HIỂN THỊ -->
+            <div id="submenu-display" class="lvl2-submenu hidden glass-panel p-1.5 rounded-2xl border-emerald-400/40 shadow-2xl flex items-center gap-1 overflow-x-auto max-w-full">
+                <button onclick="toggleLabels()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-tag text-amber-400 text-xs"></i>
+                    <span>Nhãn</span>
+                </button>
+                <button onclick="toggleGrid()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-grid-four text-cyan-400 text-xs"></i>
+                    <span>Lưới</span>
+                </button>
+                <!-- Material Modes -->
+                <div class="flex items-center p-0.5 rounded-xl bg-slate-900/80 border border-slate-700 text-xs shrink-0">
+                    <button onclick="setMaterialMode('solid')" id="mat-btn-solid" class="px-2 py-0.5 rounded bg-cyan-600 text-white font-bold text-[11px]">Đặc</button>
+                    <button onclick="setMaterialMode('wireframe')" id="mat-btn-wire" class="px-2 py-0.5 rounded text-slate-400 hover:text-white text-[11px]">Lưới</button>
+                    <button onclick="setMaterialMode('transparent')" id="mat-btn-trans" class="px-2 py-0.5 rounded text-slate-400 hover:text-white text-[11px]">Trong suốt</button>
+                </div>
+                <!-- Explode View -->
+                <button onclick="toggleExplodeView()" id="btn-explode-toggle" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-orange-300 border border-orange-500/40 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-arrows-out-simple text-orange-400 text-xs"></i>
+                    <span>Tách mặt</span>
+                </button>
+                <!-- Camera Presets -->
+                <div class="flex items-center gap-1 border-l border-slate-700 pl-1.5 text-xs shrink-0">
+                    <span class="text-slate-400 text-[10px]">Góc nhìn:</span>
+                    <button onclick="setCameraPreset('front')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px]">Trước</button>
+                    <button onclick="setCameraPreset('side')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px]">Bên</button>
+                    <button onclick="setCameraPreset('top')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px]">Trên</button>
+                    <button onclick="setCameraPreset('3d')" class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px]">3D</button>
+                    <button onclick="frameActiveObject()" class="px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-900 text-[10px]">🎯 Canh giữa</button>
+                </div>
+                <!-- Spotlight Presets -->
+                <div class="flex items-center gap-1 border-l border-slate-700 pl-1.5 text-xs shrink-0">
+                    <span class="text-slate-400 text-[10px]">Spotlight:</span>
+                    <button onclick="setSpotlight('r')" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">r</button>
+                    <button onclick="setSpotlight('h')" class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[10px]">h</button>
+                    <button onclick="setSpotlight('l')" class="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 text-[10px]">l</button>
+                    <button onclick="setSpotlight('axis')" class="px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-300 text-[10px]">Trục</button>
+                    <button onclick="setSpotlight(null)" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">✕</button>
+                </div>
+            </div>
+
+            <!-- SUBMENU 4: 👨‍🏫 GIÁO VIÊN -->
+            <div id="submenu-teacher" class="lvl2-submenu hidden glass-panel p-1.5 rounded-2xl border-purple-400/40 shadow-2xl flex items-center gap-1 overflow-x-auto max-w-full">
+                <button onclick="teacherPrevStep()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <span>← Bước</span>
+                </button>
+                <button onclick="teacherNextStep()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                    <span>Bước →</span>
+                </button>
+                <button onclick="teacherTogglePlay()" id="btn-teacher-play" class="px-2.5 py-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-black text-xs flex items-center gap-1 shrink-0">
+                    <i class="ph-fill ph-play"></i><span>Phát</span>
+                </button>
+                <button onclick="teacherReset()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold shrink-0" title="Đặt lại">
+                    <span>↺</span>
+                </button>
+                <button onclick="cycleFormulaMode()" id="btn-formula-cycle" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-cyan-300 font-mono text-xs border border-slate-700 shrink-0">
+                    <span>ƒ Công thức</span>
+                </button>
+                <button onclick="showStepHint()" class="px-2 py-1 rounded-xl bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-600/40 text-xs font-bold shrink-0">
+                    <span>💡 Gợi ý</span>
+                </button>
+                <button onclick="openStudentQuestionModal(); closeAllSubmenus();" class="px-2 py-1 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/40 text-xs font-bold shrink-0">
+                    <span>❓ Câu hỏi</span>
+                </button>
+                <button onclick="toggleLaserPointer()" id="btn-laser-toggle" class="px-2 py-1 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 text-xs font-bold shrink-0">
+                    <span>🔦 Laser</span>
+                </button>
+                <button onclick="toggleFullscreen()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-cyan-300 border border-slate-700 text-xs font-bold shrink-0">
+                    <span>⛶ Trình chiếu</span>
+                </button>
+                <button onclick="openFormulaCompareModal(); closeAllSubmenus();" class="px-2 py-1 rounded-xl bg-sky-950/80 hover:bg-sky-900 text-sky-300 border border-sky-500/40 text-xs font-bold shrink-0">
+                    <span>📊 Bảng CT</span>
+                </button>
+            </div>
+
+            <!-- SUBMENU 5: ⚙ CÀI ĐẶT -->
+            <div id="submenu-settings" class="lvl2-submenu hidden glass-panel p-2 rounded-2xl border-slate-500/40 shadow-2xl flex items-center gap-2 overflow-x-auto max-w-full text-xs">
+                <!-- Voice Narration Toggle -->
+                <button id="btn-toggle-voice" onclick="toggleVoiceNarrationSetting()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-amber-300 border border-slate-700 flex items-center gap-1 shrink-0" title="Bật/Tắt thuyết minh giọng nói các chặng">
+                    <i id="voice-icon" class="ph-bold ph-waveform text-xs text-amber-400"></i>
+                    <span>Giọng đọc:</span>
+                    <span id="voice-setting-val" class="font-bold text-amber-300">Bật</span>
+                </button>
+                <!-- Voice Speed Setting -->
+                <button id="btn-toggle-voice-speed" onclick="toggleVoiceSpeedSetting()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-amber-300 border border-slate-700 flex items-center gap-1 shrink-0" title="Chỉnh tốc độ giọng đọc">
+                    <i class="ph-bold ph-gauge text-xs text-amber-400"></i>
+                    <span>Tốc độ:</span>
+                    <span id="voice-speed-val" class="font-bold text-amber-300">0.82x (Chậm rõ)</span>
+                </button>
+                <!-- Sound Toggle -->
+                <button onclick="toggleSound()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-amber-300 border border-slate-700 flex items-center gap-1 shrink-0">
+                    <i id="sound-icon" class="ph-bold ph-speaker-high text-xs"></i>
+                    <span>Âm thanh</span>
+                </button>
+                <!-- Reduced Motion -->
+                <button onclick="toggleReducedMotion()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-person-simple-walk text-xs"></i>
+                    <span>Giảm chuyển động:</span>
+                    <span id="setting-reduced-motion-btn" class="font-bold text-cyan-300">Tắt</span>
+                </button>
+                <!-- Image Quality -->
+                <button onclick="toggleHighQuality()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-monitor text-xs"></i>
+                    <span>Chất lượng:</span>
+                    <span id="setting-quality-btn" class="font-bold text-emerald-300">Cao</span>
+                </button>
+                <!-- Units -->
+                <div class="flex items-center gap-1 shrink-0">
+                    <span class="text-slate-400 text-[10px]">Đơn vị:</span>
+                    <select onchange="setUnit(this.value)" class="bg-slate-900 text-cyan-300 font-mono text-[11px] font-bold px-1.5 py-0.5 rounded border border-slate-700 cursor-pointer outline-none">
+                        <option value="cm">cm</option>
+                        <option value="dm">dm</option>
+                        <option value="m">m</option>
+                    </select>
+                </div>
+                <!-- Reset Progress -->
+                <button onclick="resetLessonProgress()" class="px-2 py-1 rounded-xl bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-700/50 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-arrow-counter-clockwise text-xs"></i>
+                    <span>Reset bài</span>
+                </button>
+                <!-- Reset Settings -->
+                <button onclick="resetAllSettings()" class="px-2 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 flex items-center gap-1 shrink-0">
+                    <i class="ph-bold ph-gear-six text-xs"></i>
+                    <span>Reset cài đặt</span>
+                </button>
+            </div>
+
+            <!-- SUBMENU 6: 🗺 LỘ TRÌNH 7 CHẶNG POPOVER (Requirement 9) -->
+            <div id="submenu-roadmap" class="lvl2-submenu hidden glass-panel p-3 rounded-2xl border-amber-400/50 shadow-2xl flex flex-col gap-2 w-80 max-w-[90vw]">
+                <div class="flex items-center justify-between pb-1.5 border-b border-slate-700/70">
+                    <div class="flex items-center gap-1.5">
+                        <i class="ph-fill ph-map-trifold text-amber-400 text-base"></i>
+                        <span class="text-xs font-black uppercase text-amber-300">Lộ Trình 7 Chặng Bài Học</span>
+                    </div>
+                    <button onclick="closeAllSubmenus()" class="text-slate-400 hover:text-white text-xs">✕</button>
+                </div>
+                <div id="roadmap-stages-list" class="flex flex-col gap-1 max-h-64 overflow-y-auto pr-0.5">
+                    <!-- Populated dynamically with 7 stages -->
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Floating Buttons when sidebars are collapsed -->
+    <button id="btn-uncollapse-left" onclick="toggleSidebar('left')" class="fixed top-16 left-2 z-30 hidden glass-panel px-2.5 py-1.5 rounded-xl border border-cyan-500/40 text-xs font-bold text-cyan-300 shadow-xl pointer-events-auto hover:bg-cyan-950/60 transition-all flex items-center gap-1">
+        <span>▶</span> <span>Số đo</span>
+    </button>
+    <button id="btn-uncollapse-right" onclick="toggleSidebar('right')" class="fixed top-16 right-2 z-30 hidden glass-panel px-2.5 py-1.5 rounded-xl border border-amber-500/40 text-xs font-bold text-amber-300 shadow-xl pointer-events-auto hover:bg-amber-950/60 transition-all flex items-center gap-1">
+        <span>Điều khiển</span> <span>◀</span>
+    </button>
+
+    <!-- ========================================== -->
+    <!-- DRAGGABLE FLOATING LESSON WINDOW           -->
+    <!-- (Can be dragged, minimized, pinned, closed)-->
+    <!-- ========================================== -->
+    <div id="lesson-window" class="lesson-window fixed z-20 pointer-events-auto flex flex-col rounded-2xl overflow-hidden" style="width: min(440px, calc(100vw - 32px)); min-width: 300px; max-width: 520px;" tabindex="0" role="region" aria-label="Cửa sổ bài học hướng dẫn 3D">
+        <!-- Dedicated Top Drag Grip Bar with One-Touch Position Presets -->
+        <div id="lesson-top-drag-bar" class="lesson-top-drag-bar w-full py-1 px-2.5 bg-gradient-to-r from-amber-600/25 via-slate-900/90 to-amber-600/25 border-b border-amber-500/25 flex items-center justify-between cursor-grab select-none text-[10px]" title="Kéo thanh này để di chuyển bảng bài học khắp màn hình">
+            <div class="flex items-center gap-1.5 text-amber-300 font-bold tracking-wider">
+                <i class="ph-bold ph-dots-six-vertical text-amber-400 text-xs"></i>
+                <span class="uppercase text-[9px]">⠿ Kéo di chuyển bảng</span>
+            </div>
+            <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                <span class="text-[9px] text-slate-400 mr-0.5">Vị trí:</span>
+                <button onclick="movePanelPreset('bottom-left')" class="px-1.5 py-0.5 rounded bg-slate-800/90 hover:bg-amber-500 hover:text-slate-950 text-slate-300 border border-slate-700/80 transition-all text-[9px] font-bold" title="Di chuyển nhanh về góc dưới trái">↙ Trái</button>
+                <button onclick="movePanelPreset('bottom-right')" class="px-1.5 py-0.5 rounded bg-slate-800/90 hover:bg-amber-500 hover:text-slate-950 text-slate-300 border border-slate-700/80 transition-all text-[9px] font-bold" title="Di chuyển nhanh về góc dưới phải">↘ Phải</button>
+                <button onclick="movePanelPreset('top-left')" class="px-1.5 py-0.5 rounded bg-slate-800/90 hover:bg-amber-500 hover:text-slate-950 text-slate-300 border border-slate-700/80 transition-all text-[9px] font-bold" title="Di chuyển nhanh về góc trên trái">↖ Trên</button>
+                <button onclick="movePanelPreset('center')" class="px-1.5 py-0.5 rounded bg-slate-800/90 hover:bg-amber-500 hover:text-slate-950 text-slate-300 border border-slate-700/80 transition-all text-[9px] font-bold" title="Di chuyển nhanh về chính giữa">⌖ Giữa</button>
+            </div>
+        </div>
+
+        <!-- Quick Stage Selector Dropdown inside Lesson Window -->
+        <div id="lw-stage-dropdown" class="hidden absolute top-16 left-2 right-2 z-40 glass-panel p-2.5 rounded-xl border border-amber-400/60 shadow-2xl flex flex-col gap-1.5 max-h-72 overflow-y-auto backdrop-blur-xl bg-slate-950/95" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between pb-1.5 border-b border-slate-700/70">
+                <div class="flex items-center gap-1.5">
+                    <i class="ph-fill ph-map-pin text-amber-400 text-xs"></i>
+                    <span class="text-[11px] font-black uppercase text-amber-300">Chọn Nhanh Chặng Bài Học</span>
+                </div>
+                <button onclick="toggleLessonStageSelector(event)" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
+            </div>
+            <div id="lw-stage-dropdown-list" class="flex flex-col gap-1 mt-0.5">
+                <!-- Dynamically populated with all 7 stages -->
+            </div>
+        </div>
+
+        <!-- Window Drag Handle Header (Requirement 2 & 31) -->
+        <div id="lesson-drag-handle" class="lesson-drag-handle px-3 py-2 bg-slate-900/95 border-b border-slate-700/80 flex items-center justify-between cursor-grab select-none text-xs touch-none" aria-label="Di chuyển bảng bài học" title="Kéo để di chuyển bảng bài học khắp màn hình">
+            <!-- Left: Drag indicator + Title & Step (Requirement 21) -->
+            <div class="flex items-center gap-2 overflow-hidden">
+                <i class="ph-bold ph-dots-six-vertical text-amber-400 text-base shrink-0 opacity-80 cursor-grab" title="Kéo để di chuyển bảng bài học"></i>
+                <div class="flex flex-col min-w-0">
+                    <div class="flex items-center gap-1 leading-none">
+                        <button id="lw-stage-badge-btn" onclick="toggleLessonStageSelector(event)" class="text-[11px] font-black text-amber-300 hover:text-white hover:bg-slate-800 px-1 py-0.5 rounded transition-all flex items-center gap-1 -ml-1 border border-amber-500/20" title="Bấm để chuyển nhanh giữa 7 chặng">
+                            <span id="lw-stage-badge" class="truncate">📘 Chặng 1 · Bước 1/4</span>
+                            <i class="ph-bold ph-caret-down text-[9px] text-amber-400"></i>
+                        </button>
+                    </div>
+                    <span id="lw-stage-subtitle" class="text-[10px] text-slate-400 truncate mt-0.5">Quan sát hình nón 3D</span>
+                </div>
+            </div>
+
+            <!-- Right: Action Window Controls (Requirements 2, 8, 9, 10, 16) -->
+            <div class="flex items-center gap-1 shrink-0 pointer-events-auto" onclick="event.stopPropagation()">
+                <!-- Voice Narration Speaker Button (Thuyết minh giọng nói) -->
+                <button id="lw-btn-speak" onclick="toggleSpeechForCurrentStep()" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 flex items-center justify-center text-xs transition-all" title="Nghe đọc thuyết minh bài học (Bấm để Đọc / Dừng)" aria-label="Thuyết minh giọng nói">
+                    <i id="lw-speak-icon" class="ph-bold ph-speaker-high text-[11px]"></i>
+                </button>
+
+                <!-- Step Navigation Arrows (Requirement 4.2 - 4.4) -->
+                <button id="lw-btn-prev" onclick="goToPreviousStep()" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold transition-all" title="Bước trước (←)" aria-label="Bước trước">←</button>
+                <button id="lw-btn-next" onclick="goToNextStep()" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs font-bold transition-all" title="Bước tiếp (→)" aria-label="Bước tiếp">→</button>
+
+                <!-- Pin / Dock Toggle Button (Requirement 16) -->
+                <button id="lw-btn-pin" onclick="togglePinLessonPanel()" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-300 flex items-center justify-center text-xs transition-all" title="Ghim bảng vào cạnh phải (Dock)" aria-label="Ghim bảng">
+                    <i class="ph-bold ph-push-pin text-[11px]"></i>
+                </button>
+
+                <!-- Reset Position Button (Requirement 10) -->
+                <button onclick="resetPanelPosition()" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 flex items-center justify-center text-xs transition-all" title="Đưa bảng về vị trí mặc định" aria-label="Đặt lại vị trí">
+                    <i class="ph-bold ph-crosshair text-[11px]"></i>
+                </button>
+
+                <!-- Minimize Toggle Button (Requirement 8) -->
+                <button id="lw-btn-min" onclick="toggleMinimizeLessonPanel()" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-xs transition-all" title="Thu nhỏ / Mở rộng" aria-label="Thu nhỏ">
+                    <i id="lw-min-icon" class="ph-bold ph-minus text-[11px]"></i>
+                </button>
+
+                <!-- Close Button (Requirement 9) -->
+                <button onclick="closeLessonPanel()" class="w-6 h-6 rounded-lg hover:bg-rose-950/80 text-slate-400 hover:text-rose-300 flex items-center justify-center text-xs transition-all" title="Ẩn bảng bài học" aria-label="Đóng bảng">
+                    <i class="ph-bold ph-x text-[11px]"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Interactive Step Navigation Bar (Requirement 4.4) -->
+        <div id="lw-step-nav" class="flex items-center justify-between px-3 py-1.5 bg-slate-950/80 border-b border-slate-800/80 select-none pointer-events-auto">
+            <div id="lw-step-pills" class="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                <!-- Dynamically populated with clickable step pills [1] [2] [3] [4] -->
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button id="lw-sub-prev-btn" onclick="goToPreviousStep()" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-[11px] transition-all flex items-center gap-0.5" title="Quay lại bước trước">
+                    <span>← Lùi</span>
+                </button>
+                <button id="lw-sub-next-btn" onclick="goToNextStep()" class="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] transition-all shadow flex items-center gap-0.5" title="Sang bước kế tiếp">
+                    <span>Tiếp →</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Window Body (Scrollable, collapsible on minimize) -->
+        <div id="lesson-window-body" class="flex flex-col max-h-[58vh] overflow-hidden">
+            <!-- Dynamic Content (Questions, Sliders, Prediction, Hints) -->
+            <div id="guided-discovery-card" class="p-3 overflow-y-auto space-y-2 text-xs">
+                <!-- Dynamically rendered by renderGuidedCard() -->
+            </div>
+        </div>
+
+        <!-- Window Resize Handle (Requirement 19) -->
+        <div id="lesson-resize-handle" class="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize flex items-center justify-center text-[9px] text-slate-500 hover:text-amber-400 pointer-events-auto" title="Kéo để đổi kích thước bảng">
+            <svg class="w-2.5 h-2.5 opacity-60" viewBox="0 0 10 10" fill="currentColor">
+                <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Floating Re-open Button when Lesson Window is Closed (Requirement 9) -->
+    <button id="lesson-floating-fab" onclick="restoreLessonPanel()" class="hidden fixed bottom-4 right-4 z-20 glass-panel px-3.5 py-2 rounded-full border border-amber-400/50 shadow-2xl text-xs font-black text-amber-300 hover:text-white flex items-center gap-1.5 active:scale-95 transition-all">
+        <i class="ph-fill ph-book-open text-amber-400 text-sm"></i>
+        <span>📘 Mở Bài Học</span>
+        <span id="fab-step-tag" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-mono font-bold">1/4</span>
+    </button>
+
+    <!-- Main Workspace Two-Panel Layout -->
+    <main class="absolute inset-0 z-10 pointer-events-none flex justify-between p-2 md:p-3 pt-16 md:pt-16 pb-2 overflow-hidden">
+        
+        <!-- Left Panel: Geometry Dimensions & Pure Mathematics Core -->
+        <aside id="sidebar-left" class="w-60 md:w-64 flex flex-col gap-2 pointer-events-auto overflow-y-auto max-h-full pr-1 transition-transform duration-300">
+            <!-- Sidebar Header with Collapse Button -->
+            <div class="flex items-center justify-between px-1">
+                <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Bảng Kích Thước</span>
+                <button onclick="toggleSidebar('left')" class="text-[10px] text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/80 flex items-center gap-1" title="Ẩn bảng trái để mở rộng 3D">
+                    <span>◀</span> <span>Ẩn bảng</span>
+                </button>
+            </div>
+            
+            <!-- Parameters Box -->
+            <div class="glass-panel rounded-2xl p-3 flex flex-col gap-2">
+                <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                    <div class="flex items-center gap-1.5">
+                        <i class="ph-bold ph-sliders-horizontal text-amber-400 text-base"></i>
+                        <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Thông Số Kích Thước</h2>
+                    </div>
+                    <!-- Unit Selector -->
+                    <select onchange="setUnit(this.value)" class="bg-slate-900 text-cyan-300 font-mono text-[11px] font-bold px-1.5 py-0.5 rounded border border-slate-700 cursor-pointer outline-none">
+                        <option value="cm">cm</option>
+                        <option value="dm">dm</option>
+                        <option value="m">m</option>
+                    </select>
+                </div>
+
+                <!-- Radius Slider r -->
+                <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center justify-between text-xs font-semibold">
+                        <span class="text-slate-300 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
+                            Bán kính đáy <b class="text-amber-300 font-mono">r</b>
+                        </span>
+                        <span class="font-mono text-xs font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
+                            <span id="radius-val">2.2</span> cm
+                        </span>
+                    </div>
+                    <input type="range" id="slider-r" min="1.4" max="2.8" step="0.1" value="2.2" class="w-full cursor-pointer accent-amber-500">
+                </div>
+
+                <!-- Height Slider h -->
+                <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center justify-between text-xs font-semibold">
+                        <span class="text-slate-300 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span>
+                            Chiều cao <b class="text-sky-300 font-mono">h</b>
+                        </span>
+                        <span class="font-mono text-xs font-bold text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-500/30">
+                            <span id="height-val">6.6</span> cm
+                        </span>
+                    </div>
+                    <input type="range" id="slider-h" min="4.0" max="8.5" step="0.1" value="6.6" class="w-full cursor-pointer accent-sky-500">
+                </div>
+
+                <!-- Presets Quick Buttons -->
+                <div class="flex items-center justify-between pt-1 border-t border-slate-700/60 text-[10px]">
+                    <span class="text-slate-400">Mẫu:</span>
+                    <button onclick="applyPreset(2, 6)" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700">r=2, h=6</button>
+                    <button onclick="applyPreset(3, 5)" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700">r=3, h=5</button>
+                    <button onclick="randomizeDimensions()" class="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 hover:text-amber-200 border border-amber-700/40">🎲 Ngẫu nhiên</button>
+                </div>
+
+                <!-- Geometry Calculations Grid -->
+                <div class="grid grid-cols-2 gap-1.5 pt-1 text-[11px] font-mono border-t border-slate-700/60">
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">Đường sinh l</span>
+                        <span class="text-pink-300 font-bold" id="calc-l-val">6.96 cm</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">Góc quạt θ</span>
+                        <span class="text-amber-300 font-bold" id="calc-theta-val">113.8°</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col col-span-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[9px] font-sans text-slate-400">Chu vi đáy (2πr):</span>
+                            <span class="text-cyan-300 font-bold" id="calc-cbase-val">13.82 cm</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metric Cards -->
+                <div class="grid grid-cols-2 gap-1.5 pt-1 text-[11px] font-mono border-t border-slate-700/60">
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">S<sub>đáy</sub></span>
+                        <span class="font-bold text-amber-300 text-xs" id="val-sbase">15.21 cm²</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col">
+                        <span class="text-[9px] font-sans text-slate-400">V<sub>nón</sub></span>
+                        <span class="font-bold text-emerald-300 text-xs" id="val-vcone">33.45 cm³</span>
+                    </div>
+                    <div class="glass-subpanel p-1.5 rounded-xl flex flex-col col-span-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[9px] font-sans text-slate-400">Thể tích Trụ V<sub>trụ</sub>:</span>
+                            <span class="font-bold text-sky-300 text-xs" id="val-vcyl">100.36 cm³</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulas Accordion -->
+            <div class="glass-panel rounded-2xl p-3 flex flex-col gap-2">
+                <button onclick="toggleFormulas()" class="flex items-center justify-between w-full text-left">
+                    <div class="flex items-center gap-1.5">
+                        <i class="ph-bold ph-function text-cyan-400 text-base"></i>
+                        <h3 class="text-xs font-black uppercase tracking-wider text-slate-200">Công Thức Đầy Đủ</h3>
+                    </div>
+                    <i id="formula-accordion-icon" class="ph-bold ph-caret-up text-amber-400 text-sm"></i>
+                </button>
+                <div id="formula-accordion-content" class="pt-1 border-t border-slate-700/60"></div>
+            </div>
+        </aside>
+
+        <!-- Right Panel: Contextual to Mode (Volume, Net, Revolution, Section, Compare, Challenge) -->
+        <aside id="sidebar-right" class="w-64 md:w-72 flex flex-col gap-2 pointer-events-auto overflow-y-auto max-h-full pl-1 transition-transform duration-300">
+            <!-- Sidebar Header with Collapse Button -->
+            <div class="flex items-center justify-between px-1">
+                <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Bảng Điều Khiển</span>
+                <button onclick="toggleSidebar('right')" class="text-[10px] text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/80 flex items-center gap-1" title="Ẩn bảng phải để mở rộng 3D">
+                    <span>Ẩn bảng</span> <span>▶</span>
+                </button>
+            </div>
+            
+            <!-- ================= VIEW 0: CẤU TẠO HÌNH NÓN (STAGE 1) ================= -->
+            <div id="panel-mode-structure" class="flex flex-col gap-2">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-compass-tool text-amber-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Cấu Tạo & Pythagore</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="toggleModeNarration('structure')" class="btn-mode-speak px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all" title="Nghe thuyết minh cấu tạo hình nón">
+                                <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe giảng</span>
+                            </button>
+                            <span class="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/70 px-2 py-0.5 rounded-full border border-amber-700/50">
+                                Chặng 1
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 3 Dimension Indicators -->
+                    <div class="space-y-1.5 text-xs">
+                        <div class="p-2 rounded-xl bg-slate-900/80 border border-sky-500/30 flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+                                <span class="text-slate-300 font-bold">Chiều cao SO</span>
+                            </div>
+                            <span class="font-mono font-black text-sky-300" id="struct-h-val">h = 6.0 cm</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-slate-900/80 border border-amber-500/30 flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                                <span class="text-slate-300 font-bold">Bán kính đáy OB</span>
+                            </div>
+                            <span class="font-mono font-black text-amber-300" id="struct-r-val">r = 3.5 cm</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-slate-900/80 border border-pink-500/30 flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-pink-400"></span>
+                                <span class="text-slate-300 font-bold">Đường sinh SB</span>
+                            </div>
+                            <span class="font-mono font-black text-pink-300" id="struct-l-val">l = 6.95 cm</span>
+                        </div>
+                    </div>
+
+                    <!-- Pythagorean Formula Card -->
+                    <div class="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex flex-col gap-1">
+                        <div class="font-bold flex items-center gap-1 text-[11px] text-emerald-300">
+                            <i class="ph-bold ph-triangle"></i>
+                            <span>Tam giác vuông SOB tại O:</span>
+                        </div>
+                        <div class="font-mono font-black text-sm text-center text-amber-300 py-1 bg-slate-950/60 rounded-lg border border-emerald-500/20">
+                            l² = r² + h²  ⇒  l = √(r² + h²)
+                        </div>
+                        <div class="text-[10px] text-slate-400 leading-tight">
+                            Khi thay đổi bán kính đáy r hoặc chiều cao h ở bảng bên trái, đường sinh l sẽ tự động tính theo định lý Pythagore.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 1: THỂ TÍCH ================= -->
+            <div id="panel-mode-volume" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-fill ph-flask text-amber-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Thí Nghiệm Đổ Nước</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="toggleModeNarration('volume')" class="btn-mode-speak px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all" title="Nghe thuyết minh thí nghiệm thể tích">
+                                <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe giảng</span>
+                            </button>
+                            <span id="step-counter-badge" class="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/70 px-2 py-0.5 rounded-full border border-amber-700/50">
+                                Mức 0 / 3
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5">
+                        <button id="btn-pour-1" onclick="handlePour(1)" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-extrabold transition-all bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow active:scale-95">
+                            <span>1. Đổ lần 1 (1/3 Trụ)</span>
+                            <i id="check-1" class="ph-bold ph-check-circle text-base hidden text-emerald-300"></i>
+                        </button>
+                        <button id="btn-pour-2" onclick="handlePour(2)" disabled class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-800/60 text-slate-500 border border-slate-700/50 cursor-not-allowed">
+                            <span>2. Đổ lần 2 (2/3 Trụ)</span>
+                            <i id="check-2" class="ph-bold ph-check-circle text-base hidden text-emerald-300"></i>
+                        </button>
+                        <button id="btn-pour-3" onclick="handlePour(3)" disabled class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-800/60 text-slate-500 border border-slate-700/50 cursor-not-allowed">
+                            <span>3. Đổ lần 3 (Trụ đầy)</span>
+                            <i id="check-3" class="ph-bold ph-check-circle text-base hidden text-emerald-300"></i>
+                        </button>
+                    </div>
+
+                    <!-- Auto Play & Reset -->
+                    <div class="grid grid-cols-2 gap-1.5 pt-1">
+                        <button onclick="playVolumeAuto()" class="py-1.5 px-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-fill ph-play text-sm"></i>
+                            <span>Chạy Toàn Bộ</span>
+                        </button>
+                        <button onclick="resetVolumeSimulation(true)" class="py-1.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-bold flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400"></i>
+                            <span>Đặt Lại</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Formula Journey & Comparison Bar -->
+                <div class="glass-panel rounded-2xl p-3 flex flex-col gap-2">
+                    <h3 class="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <i class="ph-bold ph-lightbulb text-amber-400"></i>
+                        <span>Hình Thành Công Thức</span>
+                    </h3>
+                    <div id="formula-journey-container" class="glass-subpanel rounded-xl p-2.5 flex flex-col gap-1 min-h-[60px] justify-center"></div>
+
+                    <!-- Visual Comparison Bar -->
+                    <div class="glass-subpanel p-2 rounded-xl space-y-1">
+                        <div class="flex justify-between text-[10px] font-mono text-slate-400">
+                            <span>Tỉ lệ thể tích:</span>
+                            <b class="text-amber-300 font-bold">1 Nón : 3 Trụ</b>
+                        </div>
+                        <div class="w-full flex items-center gap-1 h-3">
+                            <div class="w-1/3 h-full bg-amber-400 rounded-sm" title="V nón = 1 phần"></div>
+                            <div class="w-2/3 h-full bg-sky-500/80 rounded-sm" title="V trụ = 3 phần (gấp 3)"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 2: KHAI TRIỂN ================= -->
+            <div id="panel-mode-net" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-cube text-cyan-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Khai Triển Thực Tế</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="toggleModeNarration('net')" class="btn-mode-speak px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all" title="Nghe thuyết minh khai triển nón phẳng">
+                                <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe giảng</span>
+                            </button>
+                            <span id="unfold-progress-val" class="font-mono text-xs font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30">
+                                0%
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Unfold Progress Scrub Slider -->
+                    <div class="flex flex-col gap-1">
+                        <div class="flex justify-between text-[11px] text-slate-300 font-semibold">
+                            <span>Mức độ mở mặt phẳng:</span>
+                            <span class="text-slate-400 font-mono">0% (3D) → 100% (Phẳng)</span>
+                        </div>
+                        <input type="range" id="slider-unfold-progress" min="0" max="100" step="1" value="0" class="w-full cursor-pointer accent-cyan-500">
+                    </div>
+
+                    <!-- Playback Actions -->
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button onclick="playUnfoldAuto()" class="py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 text-white text-xs font-black flex items-center justify-center gap-1 active:scale-95 shadow">
+                            <i class="ph-fill ph-play text-sm"></i>
+                            <span>Tự Động Mở</span>
+                        </button>
+                        <button onclick="resetUnfold()" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400"></i>
+                            <span>Gấp Lại 3D</span>
+                        </button>
+                    </div>
+
+                    <!-- Mathematical Proof Visual Callout -->
+                    <div class="glass-subpanel p-2.5 rounded-xl text-xs space-y-1 text-slate-300">
+                        <div class="font-bold text-amber-300 text-[11px] uppercase">Quy Luật Tiếp Giáp:</div>
+                        <p class="text-[11px] leading-relaxed">
+                            • Độ dài cung quạt (nón) / cạnh dài (trụ) bằng đúng <b class="text-cyan-300 font-mono">Chu vi đáy (2πr)</b>.<br>
+                            • Bán kính của quạt tròn bằng đúng <b class="text-pink-300 font-mono">Đường sinh l</b>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 3: QUAY TẠO KHỐI ================= -->
+            <div id="panel-mode-rev" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-arrows-clockwise text-amber-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Quay Hình Phẳng Quanh Trục</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="toggleModeNarration('revolution')" class="btn-mode-speak px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all" title="Nghe thuyết minh quay tam giác tạo nón">
+                                <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe giảng</span>
+                            </button>
+                            <span id="rev-angle-val" class="font-mono text-xs font-black text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
+                                0°
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Angle Scrub Slider -->
+                    <div class="flex flex-col gap-1">
+                        <div class="flex justify-between text-[11px] text-slate-300 font-semibold">
+                            <span>Góc quay quanh trục:</span>
+                            <span class="text-slate-400 font-mono">0° ──────── 360°</span>
+                        </div>
+                        <input type="range" id="slider-rev-angle" min="0" max="360" step="1" value="0" oninput="setRevolutionAngle(Number(this.value))" class="w-full cursor-pointer accent-amber-500">
+                    </div>
+
+                    <!-- Quick Angle Snaps (A3, A10) -->
+                    <div class="grid grid-cols-6 gap-1 text-[10px] font-mono">
+                        <button onclick="tweenRevolutionTo(0)" class="py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold border border-slate-700/60">0°</button>
+                        <button onclick="tweenRevolutionTo(45)" class="py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold border border-slate-700/60">45°</button>
+                        <button onclick="tweenRevolutionTo(90)" class="py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold border border-slate-700/60">90°</button>
+                        <button onclick="tweenRevolutionTo(180)" class="py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold border border-slate-700/60">180°</button>
+                        <button onclick="tweenRevolutionTo(270)" class="py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold border border-slate-700/60">270°</button>
+                        <button onclick="tweenRevolutionTo(360)" class="py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 font-bold border border-slate-700/60">360°</button>
+                    </div>
+
+                    <!-- Playback Controls (A10) -->
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button onclick="playRevolution()" id="btn-play-rev" class="py-2 px-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs flex items-center justify-center gap-1 active:scale-95 shadow">
+                            <i class="ph-fill ph-play text-sm"></i>
+                            <span>Quay</span>
+                        </button>
+                        <button onclick="pauseRevolution()" class="py-2 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-fill ph-pause text-sm text-cyan-400"></i>
+                            <span>Tạm dừng</span>
+                        </button>
+                        <button onclick="resetRevolution()" class="py-2 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 flex items-center justify-center gap-1 active:scale-95">
+                            <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400"></i>
+                            <span>Đặt lại</span>
+                        </button>
+                    </div>
+
+                    <!-- Speed Selector (A11) -->
+                    <div class="flex items-center justify-between pt-1 border-t border-slate-700/60 text-xs">
+                        <span class="text-slate-400 text-[11px] font-semibold">Tốc độ:</span>
+                        <div class="flex items-center gap-1 font-mono text-[11px]">
+                            <button onclick="setRevolutionSpeed(0.5, this)" class="rev-speed-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700">0.5×</button>
+                            <button onclick="setRevolutionSpeed(1.0, this)" class="rev-speed-btn px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold border border-amber-400">1×</button>
+                            <button onclick="setRevolutionSpeed(1.5, this)" class="rev-speed-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700">1.5×</button>
+                            <button onclick="setRevolutionSpeed(2.0, this)" class="rev-speed-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700">2×</button>
+                        </div>
+                    </div>
+
+                    <!-- Trajectory & Ghost toggles (A5, A7) -->
+                    <div class="grid grid-cols-2 gap-1 pt-1 border-t border-slate-700/60 text-xs">
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+                            <input type="checkbox" id="chk-rev-traj" checked onchange="appState.showTrajectory = this.checked; setRevolutionAngle(appState.revolveAngleDeg);" class="rounded bg-slate-800 border-slate-600 text-cyan-500">
+                            <span class="text-[11px]">Quỹ đạo điểm B</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300">
+                            <input type="checkbox" id="chk-rev-ghost" onchange="appState.showGhostProfiles = this.checked; setRevolutionAngle(appState.revolveAngleDeg);" class="rounded bg-slate-800 border-slate-600 text-cyan-500">
+                            <span class="text-[11px]">Vị trí trung gian</span>
+                        </label>
+                    </div>
+
+                    <!-- Dynamic Pedagogical Explanation Card (A12) -->
+                    <div id="rev-pedagogical-card" class="glass-subpanel p-2.5 rounded-xl text-xs space-y-1 text-slate-200 border-l-2 border-amber-400">
+                        <div class="font-bold text-amber-300 text-[11px] uppercase">Hình phẳng sinh:</div>
+                        <p id="rev-narrative-text" class="text-[11px] leading-relaxed text-slate-300">
+                            Tam giác vuông SOB quay quanh cạnh góc vuông SO tạo thành hình nón.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 4: MẶT CẮT (SECTIONS) ================= -->
+            <div id="panel-mode-section" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-knife text-emerald-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Mặt Cắt Không Gian</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="toggleModeNarration('section')" class="btn-mode-speak px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all" title="Nghe thuyết minh mặt cắt và tam giác đồng dạng">
+                                <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe giảng</span>
+                            </button>
+                            <!-- Similarity toggle button (B5) -->
+                            <button onclick="toggleSectionSimilarity()" id="btn-section-similarity" class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1">
+                                <i class="ph-bold ph-lightbulb text-amber-400"></i>
+                                <span>Đồng Dạng</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cut Type Toggle -->
+                    <div class="grid grid-cols-3 gap-1 p-0.5 rounded-xl glass-subpanel text-xs font-bold">
+                        <button id="btn-sec-horizontal" onclick="setSectionType('horizontal')" class="py-1.5 px-1 text-center rounded-lg bg-emerald-600/30 text-emerald-300 border border-emerald-400/40 text-[11px]">
+                            Ngang Đáy
+                        </button>
+                        <button id="btn-sec-axial" onclick="setSectionType('axial')" class="py-1.5 px-1 text-center rounded-lg text-slate-400 hover:text-white text-[11px]">
+                            Qua Trục
+                        </button>
+                        <button id="btn-sec-slanted" onclick="setSectionType('slanted')" class="py-1.5 px-1 text-center rounded-lg text-slate-400 hover:text-white text-[11px]">
+                            Cắt Xiên
+                        </button>
+                    </div>
+
+                    <!-- Height slider for horizontal slice -->
+                    <div id="sec-height-slider-box" class="flex flex-col gap-1">
+                        <div class="flex justify-between text-[11px] text-slate-300 font-semibold">
+                            <span>Vị trí lát cắt ngang (y):</span>
+                            <span id="sec-y-pct" class="text-slate-400 font-mono">50%</span>
+                        </div>
+                        <input type="range" id="slider-section-y" min="0" max="100" step="1" value="50" oninput="setSectionYRatio(this.value / 100)" class="w-full cursor-pointer accent-emerald-500">
+                    </div>
+
+                    <!-- Realtime Slice Readout Card -->
+                    <div id="section-readout" class="glass-subpanel p-2.5 rounded-xl"></div>
+
+                    <!-- Similar Triangles Deduction Card (B5) -->
+                    <div id="section-similarity-card" class="glass-subpanel p-2.5 rounded-xl text-xs space-y-1.5 text-slate-300 border-l-2 border-emerald-400 hidden">
+                        <div class="font-bold text-amber-300 text-[11px] uppercase flex items-center gap-1">
+                            <i class="ph-fill ph-triangle"></i>
+                            <span>Giải Thích Đồng Dạng (Tam Giác Vuông)</span>
+                        </div>
+                        <p class="text-[11px] leading-relaxed">
+                            Xét tam giác thiết diện trục: hai tam giác vuông có chung góc ở đỉnh S.<br>
+                            Ta có tỉ lệ đồng dạng:
+                        </p>
+                        <div class="p-1.5 rounded bg-slate-900/80 font-mono text-[11px] text-emerald-300 text-center">
+                            r<sub>slice</sub> / r = (h - y) / h ⇒ r<sub>slice</sub> = r × (1 - y/h)
+                        </div>
+                        <p class="text-[10px] text-slate-400">
+                            Khi y tăng từ 0 lên h, bán kính lát cắt giảm tuyến tính từ r về 0 (đỉnh nón).
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 5: SO SÁNH SONG SONG (COMPARE) ================= -->
+            <div id="panel-mode-compare" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-bold ph-columns text-cyan-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">So Sánh Song Song</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="toggleModeNarration('compare')" class="btn-mode-speak px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all" title="Nghe thuyết minh so sánh Nón và Trụ">
+                                <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe giảng</span>
+                            </button>
+                            <span class="text-[10px] font-mono text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30 font-bold">1 : 3</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 text-xs text-slate-300">
+                        <p class="leading-relaxed">
+                            Đặt hình nón và hình trụ có <b class="text-amber-300 font-mono">cùng bán kính đáy r</b> và <b class="text-sky-300 font-mono">cùng chiều cao h</b> cạnh nhau trên bệ:
+                        </p>
+
+                        <!-- Metric side-by-side card -->
+                        <div class="grid grid-cols-2 gap-1.5 font-mono text-[11px]">
+                            <div class="glass-subpanel p-2 rounded-xl flex flex-col gap-0.5 border-l-2 border-amber-400">
+                                <span class="font-sans font-bold text-amber-300 text-xs">HÌNH NÓN</span>
+                                <div>r = <span id="cmp-cone-r">2.2</span> cm</div>
+                                <div>h = <span id="cmp-cone-h">6.6</span> cm</div>
+                                <div class="text-amber-300 font-bold pt-1">V<sub>nón</sub> ≈ <span id="cmp-cone-v">33.45</span> cm³</div>
+                            </div>
+                            <div class="glass-subpanel p-2 rounded-xl flex flex-col gap-0.5 border-l-2 border-sky-400">
+                                <span class="font-sans font-bold text-sky-300 text-xs">HÌNH TRỤ</span>
+                                <div>r = <span id="cmp-cyl-r">2.2</span> cm</div>
+                                <div>h = <span id="cmp-cyl-h">6.6</span> cm</div>
+                                <div class="text-sky-300 font-bold pt-1">V<sub>trụ</sub> ≈ <span id="cmp-cyl-v">100.36</span> cm³</div>
+                            </div>
+                        </div>
+
+                        <!-- Visual Ratio Bar (F2) -->
+                        <div class="glass-subpanel p-2.5 rounded-xl space-y-1.5">
+                            <div class="flex justify-between font-mono text-[10px]">
+                                <span class="text-slate-400">Tương quan thể tích:</span>
+                                <b class="text-emerald-300 font-bold">3 × V<sub>nón</sub> = V<sub>trụ</sub></b>
+                            </div>
+                            <div class="w-full flex items-center gap-1 h-4">
+                                <div class="w-1/3 h-full bg-amber-400 rounded-sm flex items-center justify-center text-[9px] font-black text-slate-950" title="V nón = 1 phần">
+                                    NÓN (1)
+                                </div>
+                                <div class="w-2/3 h-full bg-sky-500 rounded-sm flex items-center justify-center text-[9px] font-black text-slate-950" title="V trụ = 3 phần (gấp 3)">
+                                    TRỤ (3)
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-1.5 pt-1">
+                            <button onclick="setMode('volume')" class="py-2 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-bold text-xs flex items-center justify-center gap-1 active:scale-95">
+                                <i class="ph-fill ph-drop text-amber-400"></i>
+                                <span>Thí nghiệm đổ nước</span>
+                            </button>
+                            <button onclick="openFormulaCompareModal()" class="py-2 px-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs flex items-center justify-center gap-1 active:scale-95">
+                                <i class="ph-bold ph-table text-cyan-200"></i>
+                                <span>Bảng công thức</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 6: THỬ THÁCH (CHALLENGE) ================= -->
+            <div id="panel-mode-challenge" class="flex flex-col gap-2 hidden">
+                <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700/60">
+                        <div class="flex items-center gap-1.5">
+                            <i class="ph-fill ph-trophy text-amber-400 text-base"></i>
+                            <h2 class="text-xs font-black uppercase tracking-wider text-slate-200">Đấu Trường Kiến Thức</h2>
+                        </div>
+                        <button onclick="toggleModeNarration('challenge')" class="btn-mode-speak px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition-all" title="Nghe thuyết minh đấu trường kiến thức">
+                            <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe giảng</span>
+                        </button>
+                    </div>
+                    <div id="challenge-content-card"></div>
+                </div>
+            </div>
+
+        </aside>
+    </main>
+
+    <!-- Student Question Modal (Teacher Mode C5) -->
+    <div id="student-question-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel max-w-lg w-full p-5 rounded-3xl border border-purple-500/40 shadow-2xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-xl bg-purple-500/30 text-purple-300 flex items-center justify-center font-bold text-sm">❓</span>
+                    <h3 class="text-sm font-black uppercase text-purple-200 tracking-wider">Câu Hỏi Thảo Luận Cho Học Sinh</h3>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="speakStudentQuestion()" id="btn-speak-student-q" class="px-2.5 py-1 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-500/40 text-xs font-bold flex items-center gap-1" title="Đọc to câu hỏi">
+                        <i class="ph-bold ph-speaker-high text-xs"></i><span>Đọc câu hỏi</span>
+                    </button>
+                    <button onclick="closeStudentQuestionModal()" class="text-slate-400 hover:text-white p-1">✕</button>
+                </div>
+            </div>
+            <div id="student-question-body" class="space-y-3">
+                <p id="student-question-text" class="text-base font-bold text-white leading-relaxed">
+                    Cạnh nào của tam giác vuông quay tạo thành bán kính đáy của hình nón?
+                </p>
+                <div id="student-question-answer" class="hidden p-3 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs font-semibold leading-relaxed">
+                    ĐÁP ÁN: Cạnh góc vuông nằm ngang (OB) quay quanh trục thẳng đứng tạo thành hình tròn đáy bán kính r.
+                </div>
+            </div>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-700/60">
+                <button onclick="nextStudentQuestion()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600">
+                    Câu hỏi khác ↻
+                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="speakStudentAnswer()" id="btn-speak-student-a" class="hidden px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1" title="Đọc to đáp án">
+                        <i class="ph-bold ph-speaker-high text-xs"></i><span>Đọc đáp án</span>
+                    </button>
+                    <button onclick="revealStudentAnswer()" id="btn-reveal-answer" class="px-4 py-1.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs shadow active:scale-95">
+                        Hiện Đáp Án
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Direct 3D Measurement Overlay (Tool G) -->
+    <div id="measure-overlay" class="fixed top-24 left-1/2 transform -translate-x-1/2 z-40 hidden glass-panel px-4 py-2.5 rounded-2xl border border-emerald-500/50 shadow-2xl flex items-center gap-3 bg-slate-900/95 pointer-events-auto">
+        <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-base">
+            <i class="ph-bold ph-ruler"></i>
+        </div>
+        <div>
+            <div class="text-[10px] uppercase font-bold text-emerald-300 tracking-wider">Thước Đo 3D Trực Tiếp</div>
+            <div id="measure-readout-text" class="text-xs font-mono font-bold text-white">
+                Nhấp điểm thứ nhất trên mô hình (S, O, B)...
+            </div>
+        </div>
+        <button onclick="speakCurrentMeasurement()" class="px-2 py-1 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-900 flex items-center gap-1" title="Đọc to kết quả đo">
+            <i class="ph-bold ph-speaker-high text-xs"></i><span>Đọc</span>
+        </button>
+        <button onclick="resetMeasurement()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-600">Xóa đo</button>
+        <button onclick="toggleMeasureTool()" class="text-slate-400 hover:text-white px-1">✕</button>
+    </div>
+
+    <!-- Formula Comparison Modal (Tool H) -->
+    <div id="formula-compare-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel max-w-xl w-full p-5 rounded-3xl border border-cyan-500/40 shadow-2xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-sm">📊</span>
+                    <h3 class="text-sm font-black uppercase text-cyan-200 tracking-wider">Bảng So Sánh Công Thức Nón & Trụ</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="speakFormulaCompareSummary()" class="px-2.5 py-1 rounded-xl bg-cyan-950 border border-cyan-500/40 hover:bg-cyan-900 text-cyan-200 text-xs font-bold flex items-center gap-1" title="Nghe tóm tắt so sánh công thức">
+                        <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe tóm tắt</span>
+                    </button>
+                    <button onclick="closeFormulaCompareModal()" class="text-slate-400 hover:text-white p-1">✕</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                    <thead>
+                        <tr class="border-b border-slate-700 text-slate-400 font-mono text-[11px]">
+                            <th class="py-2 px-2">Đại lượng</th>
+                            <th class="py-2 px-2 text-amber-300">Hình Nón (r, h, l)</th>
+                            <th class="py-2 px-2 text-sky-300">Hình Trụ (r, h)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/80 font-mono">
+                        <tr>
+                            <td class="py-2 px-2 font-sans font-semibold text-slate-300">Mối quan hệ l</td>
+                            <td class="py-2 px-2 text-pink-300 font-bold">l = √(r² + h²)</td>
+                            <td class="py-2 px-2 text-slate-400">l = h (đường sinh)</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2 font-sans font-semibold text-slate-300">Diện tích đáy S<sub>đáy</sub></td>
+                            <td class="py-2 px-2 text-amber-300">πr² (1 đáy)</td>
+                            <td class="py-2 px-2 text-sky-300">πr² (2 đáy)</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2 font-sans font-semibold text-slate-300">Diện tích xung quanh S<sub>xq</sub></td>
+                            <td class="py-2 px-2 text-amber-300 font-bold">πrl</td>
+                            <td class="py-2 px-2 text-sky-300 font-bold">2πrh</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2 font-sans font-semibold text-slate-300">Diện tích toàn phần S<sub>tp</sub></td>
+                            <td class="py-2 px-2 text-amber-300">πrl + πr²</td>
+                            <td class="py-2 px-2 text-sky-300">2πrh + 2πr²</td>
+                        </tr>
+                        <tr class="bg-amber-950/20">
+                            <td class="py-2 px-2 font-sans font-bold text-emerald-300">Thể tích V</td>
+                            <td class="py-2 px-2 text-emerald-300 font-black">1/3 πr²h</td>
+                            <td class="py-2 px-2 text-sky-300 font-black">πr²h</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-[11px] text-slate-400 border-t border-slate-700/60 pt-2 flex justify-between items-center">
+                <span>Nhận xét: <b class="text-amber-300">V<sub>trụ</sub> = 3 × V<sub>nón</sub></b> khi cùng bán kính r và chiều cao h.</span>
+                <button onclick="closeFormulaCompareModal()" class="px-3 py-1 rounded-xl bg-slate-800 text-slate-200 text-xs font-bold border border-slate-700">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- CLASSROOM EDITION MODALS & ACTIVITIES        -->
+    <!-- ========================================== -->
+
+    <!-- 1. Discovery Diary Modal (Requirement 5) -->
+    <div id="diary-modal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 md:p-5">
+        <div class="glass-panel max-w-2xl w-full p-4 md:p-6 rounded-3xl border border-amber-500/40 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shadow">
+                        <i class="ph-bold ph-notebook"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm md:text-base font-black uppercase text-amber-300 tracking-wider">Nhật Ký Khám Phá Toán Học</h3>
+                        <p class="text-[11px] text-slate-400">Các định lý và công thức tự phát hiện qua thao tác thực nghiệm</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="speakDiarySummary()" class="px-2.5 py-1 rounded-xl bg-amber-950 border border-amber-500/40 hover:bg-amber-900 text-amber-300 text-xs font-bold flex items-center gap-1" title="Nghe tóm tắt các định lý đã ghi">
+                        <i class="ph-bold ph-speaker-high text-xs"></i><span>Nghe tóm tắt</span>
+                    </button>
+                    <span id="diary-progress-tag" class="px-2.5 py-1 rounded-full bg-amber-950/70 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold">0 / 8 Khám phá</span>
+                    <button onclick="closeDiaryModal()" class="text-slate-400 hover:text-white p-1 rounded-lg text-lg">✕</button>
+                </div>
+            </div>
+
+            <!-- Diary Entries List -->
+            <div id="diary-entries-container" class="overflow-y-auto space-y-2.5 pr-1 flex-1">
+                <!-- Dynamically populated by renderDiscoveryDiary() -->
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-700/60 text-xs">
+                <span class="text-slate-400 italic text-[11px]">💡 Làm các thí nghiệm để tự động mở khóa các định lý mới!</span>
+                <div class="flex items-center gap-2">
+                    <button onclick="openWorksheetModal(true)" class="px-3 py-1.5 rounded-xl bg-cyan-950 border border-cyan-500/40 hover:bg-cyan-900 text-cyan-200 font-bold flex items-center gap-1.5">
+                        <i class="ph-bold ph-printer"></i><span>In Nhật Ký</span>
+                    </button>
+                    <button onclick="closeDiaryModal()" class="px-4 py-1.5 rounded-xl bg-slate-800 text-slate-200 font-bold hover:bg-slate-700">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Formula Builder Puzzle Modal (Requirement 10 & 11) -->
+    <div id="formula-builder-modal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 md:p-5">
+        <div class="glass-panel max-w-2xl w-full p-4 md:p-6 rounded-3xl border border-cyan-500/40 shadow-2xl flex flex-col gap-4 max-h-[92vh]">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-2xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-lg shadow">
+                        <i class="ph-bold ph-puzzle-piece"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm md:text-base font-black uppercase text-cyan-200 tracking-wider">Đấu Trí: Ghép Mảnh Công Thức</h3>
+                        <p class="text-[11px] text-slate-400">Kéo/chọn các khối đại lượng để kiến tạo công thức chính xác</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="speakFormulaPuzzleMission()" class="px-2.5 py-1 rounded-xl bg-cyan-950 border border-cyan-500/40 hover:bg-cyan-900 text-cyan-200 text-xs font-bold flex items-center gap-1" title="Nghe đọc nhiệm vụ ghép công thức">
+                        <i class="ph-bold ph-speaker-high text-xs"></i><span>Đọc nhiệm vụ</span>
+                    </button>
+                    <button onclick="closeFormulaBuilderModal()" class="text-slate-400 hover:text-white p-1 rounded-lg text-lg">✕</button>
+                </div>
+            </div>
+
+            <!-- Puzzle Target Selector -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                <button onclick="selectFormulaPuzzle('v_cone')" id="fpuz-btn-v_cone" class="px-3 py-1.5 rounded-xl bg-cyan-600 text-white font-bold whitespace-nowrap shadow">V nón</button>
+                <button onclick="selectFormulaPuzzle('sxq_cone')" id="fpuz-btn-sxq_cone" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 font-bold whitespace-nowrap hover:text-white">Sxq nón</button>
+                <button onclick="selectFormulaPuzzle('stp_cone')" id="fpuz-btn-stp_cone" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 font-bold whitespace-nowrap hover:text-white">Stp nón</button>
+                <button onclick="selectFormulaPuzzle('v_cyl')" id="fpuz-btn-v_cyl" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 font-bold whitespace-nowrap hover:text-white">V trụ</button>
+                <button onclick="selectFormulaPuzzle('sxq_cyl')" id="fpuz-btn-sxq_cyl" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 font-bold whitespace-nowrap hover:text-white">Sxq trụ</button>
+                <button onclick="selectFormulaPuzzle('l_slant')" id="fpuz-btn-l_slant" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 font-bold whitespace-nowrap hover:text-white">Đường sinh l</button>
+            </div>
+
+            <!-- Current Challenge Prompt & Slots -->
+            <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-700/80 flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span id="fpuz-prompt-text" class="font-bold text-amber-300">Nhiệm vụ: Lắp ráp công thức tính THỂ TÍCH HÌNH NÓN (V)</span>
+                    <span id="fpuz-score-tag" class="font-mono text-cyan-300 font-bold text-[11px]">Điểm: 0</span>
+                </div>
+
+                <!-- Equation Assembly Line -->
+                <div class="flex items-center gap-2 flex-wrap min-h-[58px] p-3 rounded-xl bg-slate-950 border-2 border-dashed border-cyan-500/40 justify-center">
+                    <span id="fpuz-left-side" class="text-base md:text-lg font-black font-mono text-amber-400">V =</span>
+                    <div id="fpuz-drop-zone" class="flex items-center gap-1.5 flex-wrap min-h-[38px]">
+                        <!-- Placed token tags go here -->
+                        <span class="text-xs text-slate-500 italic">Nhấp các khối bên dưới để đặt vào đây...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Palette -->
+            <div class="flex flex-col gap-1.5">
+                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kho thẻ thành phần toán học:</div>
+                <div id="fpuz-tokens-palette" class="flex items-center gap-2 flex-wrap">
+                    <!-- Populated dynamically: 1/3, pi, r, r^2, h, l, 2, +, sqrt(r^2+h^2) -->
+                </div>
+            </div>
+
+            <!-- 3-Tier Hint System & Feedback (Requirement 6 & 7) -->
+            <div id="fpuz-feedback-box" class="p-3 rounded-2xl glass-subpanel text-xs hidden flex-col gap-1.5">
+                <div id="fpuz-feedback-text" class="font-bold"></div>
+                <div id="fpuz-hint-text" class="text-slate-300 text-[11px]"></div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-700/60 text-xs">
+                <div class="flex items-center gap-2">
+                    <button onclick="clearFormulaPuzzle()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold">Làm Lại</button>
+                    <button onclick="requestPuzzleHint()" id="btn-fpuz-hint" class="px-3 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-600/40 font-bold flex items-center gap-1">
+                        <i class="ph-bold ph-lightbulb"></i><span>Gợi ý (<span id="fpuz-hint-count">3</span>)</span>
+                    </button>
+                </div>
+                <button onclick="checkFormulaPuzzle()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-black text-xs shadow-lg active:scale-95 flex items-center gap-1.5">
+                    <i class="ph-bold ph-check"></i><span>Kiểm Tra Công Thức</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Real-World Applications Modal (Requirement 13, 14, 15) -->
+    <div id="real-world-modal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6">
+        <div class="glass-panel max-w-5xl w-full p-4 md:p-6 rounded-3xl border border-emerald-500/50 shadow-[0_0_50px_rgba(16,185,129,0.25)] flex flex-col gap-3.5 max-h-[94vh] overflow-hidden">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-teal-500/20 text-emerald-400 flex items-center justify-center text-xl shadow border border-emerald-500/40">
+                        <i class="ph-bold ph-package"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm md:text-base font-black uppercase text-emerald-300 tracking-wider">Toán Học & Đời Sống Thực Tế</h3>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40">6 Mô hình sinh động</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Ứng dụng hình nón và hình trụ trong kỹ thuật, sản xuất, công nghiệp và văn hóa</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="speakCurrentRealWorldApp()" id="btn-rw-speak-top" class="px-3 py-1.5 rounded-xl bg-emerald-950 border border-emerald-500/50 hover:bg-emerald-900 text-emerald-200 text-xs font-bold flex items-center gap-1.5 transition-all shadow" title="Nghe thuyết minh ứng dụng này">
+                        <i class="ph-bold ph-speaker-high text-sm text-emerald-400"></i><span>Nghe thuyết minh</span>
+                    </button>
+                    <button onclick="closeRealWorldModal()" class="w-8 h-8 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-lg transition-all border border-slate-700">✕</button>
+                </div>
+            </div>
+
+            <!-- Real-World Model Selector Cards (6 Vivid Items) -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                <button onclick="selectRealWorldApp('can')" id="rw-btn-can" class="p-2.5 rounded-2xl bg-emerald-950/80 border-2 border-emerald-500 text-left flex flex-col gap-1 transition-all shadow-md group">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl group-hover:scale-110 transition-transform">🥫</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">Trụ</span>
+                    </div>
+                    <span class="font-bold text-emerald-300 text-xs line-clamp-1">Lon Nước Ngọt</span>
+                    <span class="text-[10px] text-slate-400 font-mono">r=3.3, h=12 cm</span>
+                </button>
+                <button onclick="selectRealWorldApp('hat')" id="rw-btn-hat" class="p-2.5 rounded-2xl bg-slate-900/80 border border-slate-700/80 text-left flex flex-col gap-1 hover:border-slate-500 transition-all shadow-md group">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl group-hover:scale-110 transition-transform">🎉</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-black bg-pink-950/80 text-pink-300 border border-pink-500/40">Nón</span>
+                    </div>
+                    <span class="font-bold text-slate-200 text-xs line-clamp-1">Mũ Sinh Nhật</span>
+                    <span class="text-[10px] text-slate-400 font-mono">r=8, h=15, l=17</span>
+                </button>
+                <button onclick="selectRealWorldApp('funnel')" id="rw-btn-funnel" class="p-2.5 rounded-2xl bg-slate-900/80 border border-slate-700/80 text-left flex flex-col gap-1 hover:border-slate-500 transition-all shadow-md group">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl group-hover:scale-110 transition-transform">⚗️</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-black bg-cyan-950/80 text-cyan-300 border border-cyan-500/40">Nón úp</span>
+                    </div>
+                    <span class="font-bold text-slate-200 text-xs line-clamp-1">Phễu Thí Nghiệm</span>
+                    <span class="text-[10px] text-slate-400 font-mono">r=5, h=8 cm</span>
+                </button>
+                <button onclick="selectRealWorldApp('silo')" id="rw-btn-silo" class="p-2.5 rounded-2xl bg-slate-900/80 border border-slate-700/80 text-left flex flex-col gap-1 hover:border-slate-500 transition-all shadow-md group">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl group-hover:scale-110 transition-transform">🏭</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-black bg-amber-950/80 text-amber-300 border border-amber-500/40">Ghép</span>
+                    </div>
+                    <span class="font-bold text-slate-200 text-xs line-clamp-1">Tháp Xi-Lô Thóc</span>
+                    <span class="text-[10px] text-slate-400 font-mono">Trụ+Nón 553m³</span>
+                </button>
+                <button onclick="selectRealWorldApp('nonla')" id="rw-btn-nonla" class="p-2.5 rounded-2xl bg-slate-900/80 border border-slate-700/80 text-left flex flex-col gap-1 hover:border-slate-500 transition-all shadow-md group">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl group-hover:scale-110 transition-transform">🌾</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-black bg-lime-950/80 text-lime-300 border border-lime-500/40">Nón lá</span>
+                    </div>
+                    <span class="font-bold text-slate-200 text-xs line-clamp-1">Nón Lá Việt Nam</span>
+                    <span class="text-[10px] text-slate-400 font-mono">r=20, h=18 cm</span>
+                </button>
+                <button onclick="selectRealWorldApp('icecream')" id="rw-btn-icecream" class="p-2.5 rounded-2xl bg-slate-900/80 border border-slate-700/80 text-left flex flex-col gap-1 hover:border-slate-500 transition-all shadow-md group">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl group-hover:scale-110 transition-transform">🍦</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-black bg-fuchsia-950/80 text-fuchsia-300 border border-fuchsia-500/40">Ghép</span>
+                    </div>
+                    <span class="font-bold text-slate-200 text-xs line-clamp-1">Kem Ốc Quế Giòn</span>
+                    <span class="text-[10px] text-slate-400 font-mono">Nón+Bán cầu</span>
+                </button>
+            </div>
+
+            <!-- Active Real-world Scenario Card (Large & Vivid 2-Column Stage) -->
+            <div id="rw-scenario-content" class="p-3.5 md:p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 overflow-y-auto max-h-[62vh] space-y-3">
+                <!-- Populated dynamically by selectRealWorldApp() with large vivid visuals -->
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-700/60 text-xs">
+                <button onclick="applyRealWorldToScene()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 font-bold flex items-center gap-1.5 transition-all shadow hover:shadow-cyan-500/20">
+                    <i class="ph-bold ph-arrows-clockwise text-sm"></i><span>Áp dụng kích thước này lên mô hình 3D xoay</span>
+                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="copyRealWorldProblem()" class="px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold flex items-center gap-1.5 transition-all">
+                        <i class="ph-bold ph-copy"></i><span>Chép bài toán</span>
+                    </button>
+                    <button onclick="closeRealWorldModal()" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black shadow-lg active:scale-95 transition-all">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Interactive 3D Click Quiz Banner (Requirement 8) -->
+    <div id="click-3d-banner" class="fixed top-24 left-1/2 transform -translate-x-1/2 z-40 hidden glass-panel px-4 py-2.5 rounded-2xl border-2 border-amber-400/80 shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center gap-3 bg-slate-900/95 pointer-events-auto max-w-lg">
+        <div class="w-8 h-8 rounded-xl bg-amber-500/30 text-amber-300 flex items-center justify-center font-black text-base animate-pulse">
+            <i class="ph-fill ph-cursor-click"></i>
+        </div>
+        <div class="flex-1">
+            <div class="text-[10px] uppercase font-bold text-amber-300 tracking-wider">Tương Tác Trực Tiếp Trên 3D:</div>
+            <div id="click-3d-prompt-text" class="text-xs font-bold text-white leading-tight">
+                Hãy NHẤP CHUỘT vào ĐƯỜNG SINH l (cạnh SB) trên mô hình!
+            </div>
+            <div id="click-3d-hint-text" class="text-[10px] text-slate-400 mt-0.5 hidden"></div>
+        </div>
+        <button onclick="speak3DClickPrompt()" class="px-2 py-1 rounded bg-amber-950 border border-amber-500/40 text-amber-300 text-xs font-bold hover:bg-amber-900 flex items-center gap-1" title="Nghe đọc yêu cầu tương tác">
+            <i class="ph-bold ph-speaker-high text-xs"></i>
+        </button>
+        <button onclick="cancel3DClickQuiz()" class="text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800 text-xs font-bold">Thôi</button>
+    </div>
+
+    <!-- 5. Drag & Drop Labels Overlay Activity (Requirement 9) -->
+    <div id="drag-labels-modal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 md:p-5">
+        <div class="glass-panel max-w-2xl w-full p-5 rounded-3xl border border-amber-400/40 shadow-2xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-base">🏷️</span>
+                    <div>
+                        <h3 class="text-sm font-black uppercase text-amber-200 tracking-wider">Kéo Nhãn Vào Đúng Vị Trí Cấu Tạo</h3>
+                        <p class="text-[11px] text-slate-400">Nhấp nhãn rồi nhấp vào ô mục tiêu tương ứng</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="speakDragLabelsInstructions()" class="px-2.5 py-1 rounded-xl bg-amber-950 border border-amber-500/40 hover:bg-amber-900 text-amber-200 text-xs font-bold flex items-center gap-1" title="Nghe hướng dẫn gắn nhãn">
+                        <i class="ph-bold ph-speaker-high text-xs"></i><span>Hướng dẫn</span>
+                    </button>
+                    <button onclick="closeDragLabelsModal()" class="text-slate-400 hover:text-white p-1">✕</button>
+                </div>
+            </div>
+
+            <!-- Labels Palette -->
+            <div class="flex flex-col gap-1.5">
+                <div class="text-[11px] font-bold text-slate-300">1. Chọn nhãn cần gắn:</div>
+                <div id="drag-labels-palette" class="flex items-center gap-2 flex-wrap">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Target Match Slots Grid -->
+            <div class="flex flex-col gap-1.5">
+                <div class="text-[11px] font-bold text-slate-300">2. Gắn vào thành phần tương ứng:</div>
+                <div id="drag-targets-container" class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <!-- Target cards -->
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-700/60 text-xs">
+                <span id="drag-status-text" class="text-amber-300 font-bold text-[11px]">Đã đúng: 0 / 6 nhãn</span>
+                <div class="flex items-center gap-2">
+                    <button onclick="resetDragLabels()" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white border border-slate-700 font-bold">Đặt lại</button>
+                    <button onclick="closeDragLabelsModal()" class="px-4 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black">Xong</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Printable Worksheet Modal & Printable Sheet (Requirement 33, 34) -->
+    <div id="worksheet-modal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 md:p-5">
+        <div class="glass-panel max-w-xl w-full p-5 rounded-3xl border border-cyan-500/40 shadow-2xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-base">🖨️</span>
+                    <div>
+                        <h3 class="text-sm font-black uppercase text-cyan-200 tracking-wider">Xuất Phiếu Học Tập & Báo Cáo</h3>
+                        <p class="text-[11px] text-slate-400">Chuẩn bị trang A4 chuẩn bộ giáo dục để in ra giấy hoặc lưu PDF</p>
+                    </div>
+                </div>
+                <button onclick="closeWorksheetModal()" class="text-slate-400 hover:text-white p-1">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-slate-400 font-semibold text-[11px]">Họ và tên học sinh:</label>
+                        <input type="text" id="ws-student-name" value="Nguyễn Văn A" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-medium outline-none focus:border-cyan-400">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-slate-400 font-semibold text-[11px]">Lớp:</label>
+                        <input type="text" id="ws-student-class" value="9A1" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-medium outline-none focus:border-cyan-400">
+                    </div>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-slate-400 font-semibold text-[11px]">Loại phiếu cần in:</label>
+                    <select id="ws-sheet-type" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-medium outline-none">
+                        <option value="discovery">1. Phiếu Thu Hoạch: Kết Quả Thí Nghiệm & Khám Phá</option>
+                        <option value="exercise">2. Phiếu Bài Tập: Luyện Tập Tính Diện Tích & Thể Tích</option>
+                        <option value="test">3. Bài Kiểm Tra Nhanh 15 Phút</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-700/60 text-xs">
+                <button onclick="closeWorksheetModal()" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white">Hủy</button>
+                <button onclick="triggerPrintSheet()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-black text-xs shadow-lg active:scale-95 flex items-center gap-1.5">
+                    <i class="ph-bold ph-printer"></i><span>In Ngay (Print to PDF)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Printable Sheet Container for Print Engine -->
+    <div id="printable-sheet" class="p-8 font-serif leading-relaxed text-slate-950">
+        <!-- Rendered dynamically during triggerPrintSheet() -->
+    </div>
+
+    <!-- Bottom Toast Notifications -->
+    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 translate-y-3">
+        <div class="glass-panel px-4 py-2 rounded-full border border-amber-500/40 shadow-2xl flex items-center gap-2 text-xs font-bold text-amber-200">
+            <i class="ph-fill ph-info text-amber-400 text-sm"></i>
+            <span id="toast-text">Thông báo</span>
+        </div>
+    </div>
+
+    <!-- Victory Modal Banner -->
+    <div id="victory-banner" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-40 pointer-events-none transition-all duration-500 opacity-0 -translate-y-4">
+        <div class="glass-panel px-6 py-3 rounded-3xl border border-cyan-400/50 shadow-[0_0_35px_rgba(6,182,212,0.4)] flex items-center gap-3 bg-slate-900/95 pointer-events-auto">
+            <span class="text-2xl">🎉</span>
+            <div>
+                <h4 class="text-xs font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300 uppercase">Khám Phá Thành Công!</h4>
+                <p class="text-xs text-slate-300">Ba hình nón nước vừa đúng trọn vẹn một hình trụ có cùng r và h!</p>
+            </div>
+            <button onclick="closeVictoryBanner()" class="ml-2 text-slate-400 hover:text-white p-1">✕</button>
+        </div>
+    </div>
+
+    <!-- Dev Mode HUD (Triggered by F2) -->
+    <div id="dev-hud" class="fixed bottom-2 left-2 z-50 hidden glass-panel px-3 py-1.5 rounded-lg border border-rose-500/40 text-[10px] font-mono text-rose-300">
+        <div class="font-bold text-white flex justify-between"><span>DEV MODE (F2)</span> <button onclick="document.getElementById('dev-hud').classList.add('hidden')">✕</button></div>
+        <div id="dev-info" class="pt-0.5"></div>
+    </div>
+
+    <!-- Laser Pointer Dot Indicator -->
+    <div id="laser-pointer-dot"></div>
+
+    <!-- Engine Script -->
+    <script src="app.js"></script>
+</body>
+</html>
